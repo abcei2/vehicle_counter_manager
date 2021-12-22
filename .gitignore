@@ -1,0 +1,6 @@
+db.sqlite3
+__pycache__
+*.mp4
+*.pt
+brain/yolov5/*
+brain/data/
