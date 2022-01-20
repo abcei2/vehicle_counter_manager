@@ -1,24 +1,36 @@
 version: '1'
 services:
-  postgres:
+  db:
     image: 'postgres:latest'
     restart: always
     volumes:
       - './postgres_data:/var/lib/postgresql/data'
     environment:
-      - POSTGRES_PASSWORD=ajksdfnla
+      POSTGRES_DB: vehicle_counter
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     ports:
-      - '5432:5432'
-  web:
-    build: .
-    command: python manage.py runserver 0.0.0.0:8000
-    volumes:
-      - .:/code
+      - 5432:5432
+
+  # web:
+  #   build: .
+  #   command: bash -c "while !</dev/tcp/db/5432; do sleep 1; done;python manage.py makemigrations && python manage.py migrate django_celery_results && python manage.py runserver 0.0.0.0:8000"
+  #   devices:
+  #     - capabilities: [gpu]
+  #   volumes:
+  #     - .:/code
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     POSTGRES_DB: vehicle_counter
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: postgres
+  #   depends_on:
+  #     - db
+   
+    #REDIS
+  redis:
+    image: redis:alpine
+    restart: always
     ports:
-      - "8000:8000"
-    environment:
-      - POSTGRES_NAME=postgres
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-    depends_on:
-      - postgres
+      - 6379:6379
