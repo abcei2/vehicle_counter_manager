@@ -9,6 +9,11 @@ from brain.yolov5.utils.general import scale_coords
 import os
 from itertools import permutations
 
+from shapely.geometry import Point
+from shapely.geometry.polygon import Polygon
+
+from manager.models import AfarmentDataDB, DetectionDB
+
 #YOLOV5s
 
 # STRUCT_DATA =   {
@@ -124,40 +129,55 @@ class AfarmentData:
         
 class AfarmentDataManager: 
        
-    def __init__(self, detections,count_timer):
-  
+    def __init__(self, detections,count_timer, video, zoneconfig):
+
 
         dets_dict = []
         for detection in detections:    
         
             det_dict = copy.deepcopy(detection.__dict__)
+         
             det_dict.pop("first_image")
             det_dict.pop("last_image")
             dets_dict.append(det_dict)
-
+        zones=[i for i in zoneconfig.polys.keys()]
         detections_df = pd.DataFrame(dets_dict)
-        detections_df.to_csv("Data_"+count_timer.strftime("%d%m%y_%H_%M_%S")+".csv",sep=':')
         perm_zones = list(permutations(zones, 2))
 
         afarment_data_list=[]
         for orientation in perm_zones:     
             for idx in classes.keys():
-                ammount = len(detections_df.loc[(detections_df['class_id'] == idx) & (detections_df['input_zone'] == orientation[0]) & (detections_df['output_zone'] == orientation[1])])
-                afarment_data_list.append(AfarmentData(idx,classes[idx]["name"],orientation[0][0]+orientation[1][0],ammount))
+                ammount = len(detections_df.loc[(detections_df['class_id'] == idx) & (detections_df['input_zone'] == orientation) & (detections_df['output_zone'] == orientation)])
+                afarment_data_list.append(AfarmentData(idx,classes[idx]["name"],orientation+orientation,ammount))
                    
-        afarments_dict = []
         for afarment_data in afarment_data_list:            
-            afarment_dict = copy.deepcopy(afarment_data.__dict__)
-            afarments_dict.append(afarment_dict)
-
-        pd.DataFrame(afarments_dict).to_csv("AfarmentData_"+count_timer.strftime("%d%m%y_%H_%M_%S")+".csv",sep=':')
-      
-
+            AfarmentDataDB(
+                video = video,
+                class_id = afarment_data.class_id,
+                ammount = afarment_data.ammount, 
+                maneuver = afarment_data.maneuver,
+                class_name = afarment_data.name
+            ).save()
+            
+        for detection in detections:    
+            DetectionDB(
+            video = video,
+            class_id = detection.class_id,
+            last_bbox= list(detection.last_bbox),
+            first_bbox = list(detection.first_bbox),
+            input_zone = detection.input_zone ,
+            output_zone = detection.output_zone,
+            dist_btw_bbox = detection.dist_btw_bbox ,
+            frames_counter = detection.frames_counter,
+            last_frame_detection_id =  detection.last_frame_detection_id,
+            detection_time = detection.detection_time,
+            last_detection_time = detection.last_detection_time ).save()
 
 
 class DetectionManager:
-    def __init__(self):
-        self.zoneconfig = ZoneConfig()    
+    def __init__(self,video, polys):
+        self.video = video
+        self.zoneconfig = ZoneConfig(polys)    
         self.global_counter=0
         self.zones = []
         self.detections = []
@@ -167,11 +187,11 @@ class DetectionManager:
         self.ref_frame = None
         self.orientation = None
         self.data_path = "data/"
-        perm_zones = list(permutations(zones, 2))
-        for idx in classes.keys():
-            for orientation in perm_zones:
+        # perm_zones = list(permutations(zones, 2))
+        # for idx in classes.keys():
+        #     for orientation in perm_zones:
                 
-                os.makedirs(f"{self.data_path}{orientation[0][0]}{orientation[1][0]}/"+classes[idx]["name"], exist_ok=True)
+        #         os.makedirs(f"{self.data_path}{orientation[0][0]}{orientation[1][0]}/"+classes[idx]["name"], exist_ok=True)
             
 
     def obj_new(self,track_id,class_id, bbox,img,frame_idx):
@@ -230,37 +250,33 @@ class DetectionManager:
         
         detection.output_zone = self.object_detectable(detection.last_bbox)["zone"]
         # SET ORIENTATION
-        detection.orientation = detection.input_zone[0]+detection.output_zone[0]
+        detection.orientation = detection.input_zone+detection.output_zone
         print(detection.orientation)
-        first_bbox = detection.first_bbox        
-        last_bbox = detection.last_bbox
-
-        class_id = detection.class_id
-        # IN    
-        first_img_zones = self.zoneconfig.draw_zones(detection.first_image)
-        p1, p2 = (int(first_bbox[0]), int(first_bbox[1])), (int(first_bbox[2]), int(first_bbox[3]))
-        cv2.rectangle(first_img_zones, p1, p2, (0,255,0), 2, cv2.LINE_AA)                 
-        cv2.putText(
-            first_img_zones,
-            detection.frames_counter_class[class_id]["name"], 
-            p1,0, 2, (0,0,255),thickness=3, 
-            lineType=cv2.LINE_AA
-        )
-        first_img_zones = cv2.circle(first_img_zones,(int((p2[0]+p1[0])/2), int((p2[1]+p1[1])/2)), radius=5, color=(0, 0, 255), thickness=-1)
-        cv2.imwrite(f"{self.data_path}{detection.orientation}/"+classes[class_id]["name"]+"/"+str(detection.id)+"_in.jpg",first_img_zones)
-        # OUT     
-        last_img_zones = self.zoneconfig.draw_zones(detection.last_image)
-        p1, p2 = (int(last_bbox[0]), int(last_bbox[1])), (int(last_bbox[2]), int(last_bbox[3]))
-        cv2.rectangle(last_img_zones, p1, p2, (0,0,255), 2, cv2.LINE_AA) 
-        cv2.putText(
-            last_img_zones,
-            detection.frames_counter_class[detection.class_id]["name"], 
-            p1,0, 2, (0,0,255),thickness=3, 
-            lineType=cv2.LINE_AA
-        )
-        last_img_zones = cv2.circle(last_img_zones,(int((p2[0]+p1[0])/2), int((p2[1]+p1[1])/2)), radius=5, color=(0, 0, 255), thickness=-1)
+        # # IN    
+        # first_img_zones = self.zoneconfig.draw_zones(detection.first_image)
+        # p1, p2 = (int(first_bbox[0]), int(first_bbox[1])), (int(first_bbox[2]), int(first_bbox[3]))
+        # cv2.rectangle(first_img_zones, p1, p2, (0,255,0), 2, cv2.LINE_AA)                 
+        # cv2.putText(
+        #     first_img_zones,
+        #     detection.frames_counter_class[class_id]["name"], 
+        #     p1,0, 2, (0,0,255),thickness=3, 
+        #     lineType=cv2.LINE_AA
+        # )
+        # first_img_zones = cv2.circle(first_img_zones,(int((p2[0]+p1[0])/2), int((p2[1]+p1[1])/2)), radius=5, color=(0, 0, 255), thickness=-1)
+        # cv2.imwrite(f"{self.data_path}{detection.orientation}/"+classes[class_id]["name"]+"/"+str(detection.id)+"_in.jpg",first_img_zones)
+        # # OUT     
+        # last_img_zones = self.zoneconfig.draw_zones(detection.last_image)
+        # p1, p2 = (int(last_bbox[0]), int(last_bbox[1])), (int(last_bbox[2]), int(last_bbox[3]))
+        # cv2.rectangle(last_img_zones, p1, p2, (0,0,255), 2, cv2.LINE_AA) 
+        # cv2.putText(
+        #     last_img_zones,
+        #     detection.frames_counter_class[detection.class_id]["name"], 
+        #     p1,0, 2, (0,0,255),thickness=3, 
+        #     lineType=cv2.LINE_AA
+        # )
+        # last_img_zones = cv2.circle(last_img_zones,(int((p2[0]+p1[0])/2), int((p2[1]+p1[1])/2)), radius=5, color=(0, 0, 255), thickness=-1)
       
-        cv2.imwrite(f"{self.data_path}{detection.orientation}/"+classes[class_id]["name"]+"/"+str(detection.id)+"_out.jpg",last_img_zones)
+        # cv2.imwrite(f"{self.data_path}{detection.orientation}/"+classes[class_id]["name"]+"/"+str(detection.id)+"_out.jpg",last_img_zones)
 
     def obj_lost(self,track_id,class_id):
         new_det = []
@@ -277,13 +293,6 @@ class DetectionManager:
                 new_det.append(detection)
        
         self.detections = new_det
-
-
-    def set_zones(self,img):
-        
-        if not self.zoneconfig.configured:    
-            self.zoneconfig.update_image(img)
-            self.zoneconfig.configure_system_coordinates()
 
     def filter_bbox_by_zones(self,preds,img,im0):
         filtered_preds=None
@@ -303,12 +312,14 @@ class DetectionManager:
         return [filtered_preds]
         
     def object_detectable(self, bbox):        
-        inside_some_polygon = self.zoneconfig.point_inside_area([int((bbox[0]+bbox[2])/2),int((bbox[1]+bbox[3])/2)])        
-        for key_poly in inside_some_polygon:
-            if inside_some_polygon[key_poly]:
+        point = [int((bbox[0]+bbox[2])/2),int((bbox[1]+bbox[3])/2)]      
+        for key_poly in self.zoneconfig.polys:           
+            zone = Polygon( [self.zoneconfig.polys[key_poly][0], self.zoneconfig.polys[key_poly][1], self.zoneconfig.polys[key_poly][2], self.zoneconfig.polys[key_poly][3]] )
+            if zone.contains( Point( point)  ):                    
                 return {"zone":key_poly, "detectable":True}
-
+       
         return {"zone":"NO ZONE", "detectable":False}
+
     def update(self,bbox,track_id,class_id,img,is_lost,frame_idx):    
 
         if len(self.detections)>0 and self.count_timer + datetime.timedelta( minutes = TEMP_FINISH_TIMER_MINUTES, seconds=TEMP_FINISH_TIMER_SECONDS) < datetime.datetime.now():
@@ -320,8 +331,8 @@ class DetectionManager:
                 if self.same_bbox_by_distance(detection):                    
                     continue 
                 new_det.append(detection)
-            
-            AfarmentDataManager(new_det,self.count_timer)
+         
+            AfarmentDataManager(new_det,self.count_timer,self.video,self.zoneconfig)
             self.detections=[]
 
         if is_lost:

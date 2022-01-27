@@ -51,43 +51,57 @@ class Video(models.Model):
     owner_name = models.CharField(max_length=64)
     video_link = models.FileField(db_index=True, upload_to='not_used')
     
-class ZoneConfig(models.Model):
+class ZoneConfigDB(models.Model):
     
-    poly = models.JSONField() 
+    video = models.ForeignKey(Video, on_delete=models.CASCADE ) 
  
  
-    def point_inside_area(self, point):      
+    def object_detectable(self, bbox): 
+        '''
+            If object is detectable in some zone
+        '''   
+        point=([int((bbox[0]+bbox[2])/2),int((bbox[1]+bbox[3])/2)])        
+        for zone_poly in self.zone_set.all():
+            zone = Polygon( [points for points in zone_set.poly] )
+            if zone.contains( Point(point)  ):                
+                return {"zone":zone_poly, "detectable":True}
+
+        return {"zone":None, "detectable":False}
         
-        """
-            DEFINE FUNCT
-        """
-        return to_return
 
-
+class Zone(models.Model):
     
-class Detection(models.Model):
-
-    frames_counter_class= models.JSONField() 
-    
-    class_id = models.IntegerField()
-
-    last_bbox = ArrayField(models.IntegerField())
-    first_bbox = ArrayField(models.IntegerField()) 
-    dist_btw_bbox = models.IntegerField()    
-    
-    input_zone = models.ForeignKey(ZoneConfig, on_delete=models.CASCADE)
-    input_zone = models.IntegerField(default = -1)
-    output_zone = models.IntegerField(default = -1)
-    frames_counter = models.IntegerField(default = 0)        
-    last_frame_detection_id = models.IntegerField(default = 0)   
-    is_lost = models.BooleanField()
-
-    detection_time = models.TimeField(auto_now=True)
-    last_detection_time = models.TimeField()  
+    zone_config = models.ForeignKey(ZoneConfigDB, on_delete=models.CASCADE)
+    name = models.CharField(max_length=64)
+    poly = ArrayField(
+        ArrayField(
+            models.IntegerField(),
+            size=2            
+        )
+    ) 
 
 
-class AfarmentData(models.Model):
+
+class AfarmentDataDB(models.Model):
+    video = models.ForeignKey(Video, on_delete=models.CASCADE ) 
     ammount = models.IntegerField()
     maneuver = models.CharField(max_length=64)
     class_name = models.CharField(max_length=64)
     class_id = models.IntegerField()
+    
+class DetectionDB(models.Model):
+    video = models.ForeignKey(Video, on_delete=models.CASCADE ) 
+    class_id = models.IntegerField()
+
+    last_bbox = ArrayField(models.IntegerField(default = 0), null=True)
+    first_bbox = ArrayField(models.IntegerField(default = 0), null=True)         
+   
+    input_zone = models.CharField(max_length=64)
+    output_zone =  models.CharField(max_length=64)
+
+    dist_btw_bbox = models.IntegerField(default = -1)    
+    frames_counter = models.IntegerField(default = 0)        
+    last_frame_detection_id = models.IntegerField(default = 0)   
+
+    detection_time = models.TimeField(auto_now=True)
+    last_detection_time = models.TimeField(null= True)  

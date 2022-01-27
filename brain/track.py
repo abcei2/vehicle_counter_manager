@@ -78,13 +78,8 @@ def detect(opt, detection_manager):
     dt, seen = [0.0, 0.0, 0.0], 0
 
     for frame_idx, (path, img, im0s, vid_cap, s) in enumerate(dataset):
-        ###########
-        if not detection_manager.zoneconfig.configured: 
-            detection_manager.set_zones(im0s) 
-            detection_manager.ref_frame = im0s 
-            continue 
-        
-        ############
+        if detection_manager.ref_frame is None:
+            detection_manager.ref_frame=img
         t1 = time_sync()
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
@@ -159,6 +154,8 @@ def detect(opt, detection_manager):
                 deepsort.increment_ages()
             # Stream results
             im0 = annotator.result()
+            cv2.imshow("Image",im0)
+            cv2.waitKey(10)
       
 
         
