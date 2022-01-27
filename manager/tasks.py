@@ -8,6 +8,7 @@ from brain.track import detect
 from brain.own_work.detection_manager import DetectionManager
 import argparse
 import torch
+from manager.models import Video, DetectionManager, ZonePoly
 
 class Options:
     def __init__(self):
@@ -29,9 +30,16 @@ class Options:
 
 @shared_task
 def adding_task(x, y):
-  
-    print("?")
-    detection_manager = DetectionManager()
+      
+    video=Video(owner_name="santi",video_link="./brain/hiv00177.mp4")
+    video.save()
+    detection_manager = DetectionManager(video=video)
+    detection_manager.save()
+    ZonePoly(detection_manager=detection_manager,name="north",poly=[[717, 1001], [670, 496], [1576, 438], [1924, 875]]).save()
+    ZonePoly(detection_manager=detection_manager,name="south",poly=[[681, 23],[684, 222], [1362, 176], [1073, 11]]).save()
+    ZonePoly(detection_manager=detection_manager,name="west",poly=[[1407, 223], [1751, 555], [1905, 505], [1893, 246]]).save()
+    ZonePoly(detection_manager=detection_manager,name="east",poly=[[14, 227], [26, 688],  [614, 565],[602, 160]]).save()
+    ZonePoly(detection_manager=detection_manager,name="center",poly=[[598, 244],[596, 521], [1600, 460],[1337, 180]]).save()
     with torch.no_grad():
         detect(Options(), detection_manager)
     return "finish"

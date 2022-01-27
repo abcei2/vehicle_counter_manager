@@ -17,7 +17,7 @@ class DesignatedArea:
         return self.zone.contains( Point( inPoint)  )
 
 class ZoneConfig:
-    def __init__(self,ref_frame=[],load_config=True,save_config=True,path_config="./brain/own_work/zone_config.json"):
+    def __init__(self,ref_frame=[],calibrate=False,load_config=True,save_config=True,path_config="./brain/own_work/zone_config.json"):
         self.ref_frame = ref_frame.copy()
         self.draw_frame = ref_frame.copy()
         self.save_config = save_config
@@ -26,6 +26,7 @@ class ZoneConfig:
         self.pressed = False
         self.configured = False
         self.load_config = load_config
+        self.calibrate = calibrate
         self.path_config = path_config
         self.north_poly = {
             "p1":{
@@ -188,7 +189,10 @@ class ZoneConfig:
 
 
     def configure_system_coordinates(self):
-        
+        print(self.calibrate)
+        if not self.calibrate:
+            self.configured = True
+            return
         if self.configured:
             return
         cv2.namedWindow('image')
