@@ -50,6 +50,8 @@ DEFAULT_FRAMES_COUNTER_CLASS={
 class Video(models.Model):
     owner_name = models.CharField(max_length=64)
     video_link = models.FileField(db_index=True, upload_to='not_used')
+    frame_ammount = models.IntegerField(default=-1)
+    fps = models.IntegerField(default=-1)
     
 class ZoneConfigDB(models.Model):
     

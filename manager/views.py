@@ -11,3 +11,8 @@ def app_save(request):
         newdoc = Video(owner_name="santi",video_link=request.FILES.get('myfile'))
         newdoc.save()
         return HttpResponse("ok")
+
+        # app/front/views.py
+
+def chat(request):
+    return render(request, 'chat.html')

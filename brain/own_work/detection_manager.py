@@ -40,13 +40,6 @@ from manager.models import AfarmentDataDB, DetectionDB
 TEMP_FINISH_TIMER_MINUTES = 15
 TEMP_FINISH_TIMER_SECONDS = 0
 
-zones =[        
-    "north_poly",
-    "south_poly",
-    "west_poly",
-    "east_poly",      
-    "center_poly"
-]  
 
 classes ={
     0:{
@@ -175,10 +168,14 @@ class AfarmentDataManager:
 
 
 class DetectionManager:
-    def __init__(self,video, polys):
+    def __init__(self,video, polys,ws):
+        self.frame_ammount = -1
+        self.fps = -1
         self.video = video
+        self.ws = ws
         self.zoneconfig = ZoneConfig(polys)    
         self.global_counter=0
+        self.global_frame = -1
         self.zones = []
         self.detections = []
         self.detections_dataframe = None
@@ -321,7 +318,8 @@ class DetectionManager:
         return {"zone":"NO ZONE", "detectable":False}
 
     def update(self,bbox,track_id,class_id,img,is_lost,frame_idx):    
-
+        self.global_frame+=1
+        self.ws.send(str(self.global_frame/self.frame_ammount))
         if len(self.detections)>0 and self.count_timer + datetime.timedelta( minutes = TEMP_FINISH_TIMER_MINUTES, seconds=TEMP_FINISH_TIMER_SECONDS) < datetime.datetime.now():
             self.count_timer = datetime.datetime.now()
             new_det = []

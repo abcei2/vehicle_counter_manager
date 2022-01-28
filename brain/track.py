@@ -80,6 +80,8 @@ def detect(opt, detection_manager):
     for frame_idx, (path, img, im0s, vid_cap, s) in enumerate(dataset):
         if detection_manager.ref_frame is None:
             detection_manager.ref_frame=img
+            detection_manager.fps =  vid_cap.get(cv2.CAP_PROP_FPS)
+            detection_manager.frame_ammount =  int(vid_cap.get(cv2.CAP_PROP_FRAME_COUNT))
         t1 = time_sync()
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
@@ -156,9 +158,11 @@ def detect(opt, detection_manager):
             im0 = annotator.result()
             cv2.imshow("Image",im0)
             cv2.waitKey(10)
+
       
 
         
+
 
 
 
