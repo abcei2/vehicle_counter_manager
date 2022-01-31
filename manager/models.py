@@ -1,5 +1,5 @@
 from django.db import models
-from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.fields import ArrayField, JSONField
 # Create your models here.
         
 DEFAULT_POLY = {
@@ -47,39 +47,45 @@ DEFAULT_FRAMES_COUNTER_CLASS={
     }           
 }
 
+
+
+
+class VideoOwner(models.Model):
+    name = models.CharField(max_length=64, unique = True)
+
 class Video(models.Model):
-    owner_name = models.CharField(max_length=64)
+    QUEUED = "Queued"
+    PROCCESING = "Proccesing"
+    FINISHED = "Finished"
+
+    VIDEO_STATUS = (
+        (QUEUED, "Queued"),
+        (PROCCESING, "Proccesing"),
+        (FINISHED, "Finished"),
+    )
+
+    owner = models.ForeignKey(VideoOwner, on_delete=models.CASCADE ) 
     video_link = models.FileField(db_index=True, upload_to='not_used')
     frame_ammount = models.IntegerField(default=-1)
+    frame_processed = models.IntegerField(default=0)
     fps = models.IntegerField(default=-1)
-    
+    status = models.CharField(max_length=64,
+                    choices=VIDEO_STATUS,
+                    default=QUEUED)
+    task_id = models.CharField(max_length=128, null = True)
+        
 class ZoneConfigDB(models.Model):
     
     video = models.ForeignKey(Video, on_delete=models.CASCADE ) 
  
  
-    def object_detectable(self, bbox): 
-        '''
-            If object is detectable in some zone
-        '''   
-        point=([int((bbox[0]+bbox[2])/2),int((bbox[1]+bbox[3])/2)])        
-        for zone_poly in self.zone_set.all():
-            zone = Polygon( [points for points in zone_set.poly] )
-            if zone.contains( Point(point)  ):                
-                return {"zone":zone_poly, "detectable":True}
-
-        return {"zone":None, "detectable":False}
-        
 
 class Zone(models.Model):
     
     zone_config = models.ForeignKey(ZoneConfigDB, on_delete=models.CASCADE)
     name = models.CharField(max_length=64)
-    poly = ArrayField(
-        ArrayField(
-            models.IntegerField(),
-            size=2            
-        )
+    poly = ArrayField(    
+        models.JSONField()   
     ) 
 
 
