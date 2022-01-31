@@ -311,7 +311,7 @@ class DetectionManager:
     def object_detectable(self, bbox):        
         point = [int((bbox[0]+bbox[2])/2),int((bbox[1]+bbox[3])/2)]      
         for key_poly in self.zoneconfig.polys:           
-            zone = Polygon( [self.zoneconfig.polys[key_poly][0], self.zoneconfig.polys[key_poly][1], self.zoneconfig.polys[key_poly][2], self.zoneconfig.polys[key_poly][3]] )
+            zone = Polygon( [poly_point for poly_point in self.zoneconfig.polys[key_poly]] )
             if zone.contains( Point( point)  ):                    
                 return {"zone":key_poly, "detectable":True}
        
