@@ -168,11 +168,10 @@ class AfarmentDataManager:
 
 
 class DetectionManager:
-    def __init__(self,video, polys,ws):
+    def __init__(self,video, polys):
         self.frame_ammount = -1
         self.fps = -1
         self.video = video
-        self.ws = ws
         self.zoneconfig = ZoneConfig(polys)    
         self.global_counter=0
         self.global_frame = -1
@@ -310,16 +309,16 @@ class DetectionManager:
         
     def object_detectable(self, bbox):        
         point = [int((bbox[0]+bbox[2])/2),int((bbox[1]+bbox[3])/2)]      
-        for key_poly in self.zoneconfig.polys:           
-            zone = Polygon( [poly_point for poly_point in self.zoneconfig.polys[key_poly]] )
+        for zone_obj in self.zoneconfig:           
+            zone = Polygon( [[poly_point["x"],poly_point["y"]] for poly_point in zone_obj["poly"]] )
             if zone.contains( Point( point)  ):                    
-                return {"zone":key_poly, "detectable":True}
+                return {"zone":zone_obj["name"], "detectable":True}
        
         return {"zone":"NO ZONE", "detectable":False}
 
     def update(self,bbox,track_id,class_id,img,is_lost,frame_idx):    
         self.global_frame+=1
-        self.ws.send(str(self.global_frame/self.frame_ammount))
+        # self.ws.send(str(self.global_frame/self.frame_ammount))
         if len(self.detections)>0 and self.count_timer + datetime.timedelta( minutes = TEMP_FINISH_TIMER_MINUTES, seconds=TEMP_FINISH_TIMER_SECONDS) < datetime.datetime.now():
             self.count_timer = datetime.datetime.now()
             new_det = []
