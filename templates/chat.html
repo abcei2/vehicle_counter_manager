@@ -4,6 +4,8 @@
       
         <input id="image-file" type="file" onchange="test(this)" >
         <script>
+            const SOCKET_NAME = "python"
+            // var CHAT_SOCKET = null;
             async function test(ev){
                 
                 let photo = ev.files[0];      
@@ -12,64 +14,83 @@
                 console.log(photo)
                 formdata.append("myfile", ev.files[0]);
 
+                formdata.append("json", "{\n	\"username\":\"adrian\",\n	\"zones\": [\n		{\n			\"name\": \"as\",\n			\"poly\": [\n				{\n					\"x\": 100,\n					\"y\": 246 \n				},\n				{\n					\"x\": 150,\n					\"y\": 200 \n				},\n				{\n					\"x\": 100,\n					\"y\": 246 \n				}\n			] \n		},\n		{\n			\"name\": \"sas\",\n			\"poly\": [\n				{\n					\"x\": 100,\n					\"y\": 246 \n				},\n				{\n					\"x\": 100,\n					\"y\": 246 \n				},\n				{\n					\"x\": 150,\n					\"y\": 200 \n				}\n			] \n		}\n	]\n}");
+               
                 var requestOptions = {
+                    method: 'POST',
+                    body: formdata,
+                    redirect: 'follow'
+                };
+
+                fetch("http://localhost:8000", requestOptions)
+                .then(response => EvalResponse(response))
+                .then(
+                )
+                .catch(error => console.log('error', error));
+            }
+            function EvalResponse(response){
+                if(response.ok)
+                    response.text().then(result => {
+                        console.log(result)
+                        ConnectSocket(SOCKET_NAME)
+                    })
+                else
+                    response.text().then(error => {throw new Error(error)})
+            }
+            function ConnectSocket(socketName){
+               
+                
+                const CHAT_SOCKET = new WebSocket('ws://localhost:8000/ws/chat/' + socketName + '/');
+                
+                // Conectado
+                CHAT_SOCKET.addEventListener('open', () => {
+                    console.log('Conectado');
+                    sendMessage("empezando esta monda!",CHAT_SOCKET)
+                });
+                // Desconectado
+                CHAT_SOCKET.addEventListener('close', () => {
+                    console.log('Desconectado');
+                });
+
+                // Recibir mensaje
+                CHAT_SOCKET.addEventListener('message', (event) => {
+
+                    console.log(event.data*100);
+                    
+                });
+
+            }
+            
+            function askVideoQueued(){
+                let formdata = new FormData();
+                formdata.append("username", "adrian");
+
+                let requestOptions = {
                 method: 'POST',
                 body: formdata,
                 redirect: 'follow'
                 };
 
-                fetch("http://localhost:8000", requestOptions)
+                fetch("http://localhost:8000/estado", requestOptions)
                 .then(response => response.text())
-                .then(result => console.log(result))
+                .then(result => {
+                    result=JSON.parse(result)
+                    console.log(result)
+                    if(result.queued_video)
+                        ConnectSocket(SOCKET_NAME)
+                })
                 .catch(error => console.log('error', error));
             }
-           
-         /*
-          * VARIABLES
-          */
-         // Define el nombre de la sala
-         const SALA_CHAT = 'python';
-         // Conecta con WebSockets
-         const CHAT_SOCKET = new WebSocket('ws://192.168.1.1:8000/ws/chat/' + SALA_CHAT + '/');
-         // Captura el campo con el nombre del usuario
+            function sendMessage(mensaje,CHAT_SOCKET) {
+                // Envia al WebSocket un nuevo mensaje
+                CHAT_SOCKET.send(JSON.stringify({
+                    polys: [],
+                    nombre: "hello",
+                    mensaje: mensaje
+                }));
+            }
 
-
-         /*
-          * FUNCIONES
-          */
-
-         /**
-          * Método que envia el mensaje al consumer por medio de WebSockets
-          */
-         function enviarNuevoMensaje(mensaje) {
-             // Envia al WebSocket un nuevo mensaje
-             CHAT_SOCKET.send(JSON.stringify({
-                 polys: [],
-                 nombre: "hello",
-                 mensaje: mensaje
-             }));
-         }
-
-         /*
-          * EVENTOS
-          */
-
-         // Conectado
-         CHAT_SOCKET.addEventListener('open', () => {
-             console.log('Conectado');
-             enviarNuevoMensaje("empezando esta monda!")
-         });
-         // Desconectado
-         CHAT_SOCKET.addEventListener('close', () => {
-              console.log('Desconectado');
-          });
-
-         // Recibir mensaje
-         CHAT_SOCKET.addEventListener('message', (event) => {
-             console.log(event.data*100);
-            
-          });
-
+            askVideoQueued()
         </script>
     </body>
 </html>
