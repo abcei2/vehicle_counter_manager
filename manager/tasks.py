@@ -35,13 +35,15 @@ class Options:
 
 class Websockets:
 
-    def __init__(self):
+    def __init__(self,username,video,polys):
         websocket.enableTrace(True)
-        ws = websocket.WebSocketApp("ws://192.168.1.1:8000/ws/chat/python/",
+        ws = websocket.WebSocketApp(f"ws://localhost:8000/ws/chat/{username}/",
                             on_open=self.on_open,
                             on_message=self.on_message,
                             on_error=self.on_error,
-                            on_close=self.on_close)        
+                            on_close=self.on_close)     
+        self.video = video
+        self.polys = polys
         ws.run_forever()
 
     def on_message(self, ws, message):
@@ -55,16 +57,10 @@ class Websockets:
 
     def on_open(self, ws):
         def run(*args):
-            video=Video(owner_name="santi",video_link="./brain/hiv00177.mp4")
-            video.save()
-            polys={
-                "north":[[717, 1001], [670, 496], [1576, 438], [1924, 875]],
-                "south":[[681, 23],[684, 222], [1362, 176], [1073, 11]],
-                "west":[[1407, 223], [1751, 555], [1905, 505], [1893, 246]],
-                "east":[[14, 227], [26, 688],  [614, 565],[602, 160]],
-                "center":[[598, 244],[596, 521], [1600, 460],[1337, 180]]
-            }
-            detection_manager = DetectionManager(video,polys,ws)
+            self.video.status = self.video.PROCESSING
+            self.video.save()
+
+            detection_manager = DetectionManager(self.video,self.polys,ws)
             with torch.no_grad():
                 detect(Options(), detection_manager)
             time.sleep(1)
@@ -72,7 +68,12 @@ class Websockets:
         _thread.start_new_thread(run, ())
 
 @shared_task
-def adding_task(x, y):
-  
-    Websockets()
+def video_to_queue(video_pk):
+    video = Video.objects.get(pk=video_pk)
+    print(video,video.zoneconfigdb_set.all())
+    polys = video.zoneconfigdb_set.all()[0].zone_set.all()
+    print(polys)
+    Websockets(video.owner.name,video,polys)
+    video.status = video.FINISHED
+    video.save()
     return "finish"

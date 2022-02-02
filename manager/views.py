@@ -4,7 +4,7 @@ from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from .models import Video, VideoOwner, ZoneConfigDB, Zone
 import json
-
+from .tasks import video_to_queue
 # Create your views here.
 @csrf_exempt 
 def app_save(request):
@@ -62,6 +62,10 @@ def app_save(request):
 
             response.status_code = 200
             response.content = "Your video is on queued please connect to the socket."
+         
+            task_on_queue = video_to_queue.delay(video.pk)
+            video.task_id = task_on_queue.id
+            video.save()
             return response
 
         # app/front/views.py

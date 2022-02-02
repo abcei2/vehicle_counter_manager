@@ -55,12 +55,12 @@ class VideoOwner(models.Model):
 
 class Video(models.Model):
     QUEUED = "Queued"
-    PROCCESING = "Proccesing"
+    PROCESSING = "Processing"
     FINISHED = "Finished"
 
     VIDEO_STATUS = (
         (QUEUED, "Queued"),
-        (PROCCESING, "Proccesing"),
+        (PROCESSING, "Processing"),
         (FINISHED, "Finished"),
     )
 

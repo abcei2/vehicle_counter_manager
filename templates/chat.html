@@ -4,17 +4,138 @@
       
         <input id="image-file" type="file" onchange="test(this)" >
         <script>
-            const SOCKET_NAME = "python"
-            // var CHAT_SOCKET = null;
+            
+            const SOCKET_NAME = "santi2"
+            const data_out_example = {
+                "username":SOCKET_NAME,
+                "zones": [
+                    {
+                        "name": "north",
+                        "poly": [
+                            {
+                                "x": 717,
+                                "y": 1001 
+                            },
+                            {
+                                "x": 670,
+                                "y": 496 
+                            },
+                            {
+                                "x": 1576,
+                                "y": 438 
+                            },
+                            {
+                                "x": 1924,
+                                "y": 875 
+                            }
+                        ] 
+                    },       
+                    
+                    {
+                        "name": "south",
+                        "poly": [
+                            {
+                                "x": 681,
+                                "y": 23 
+                            },
+                            {
+                                "x": 684,
+                                "y": 222 
+                            },
+                            {
+                                "x": 1362,
+                                "y": 176 
+                            },
+                            {
+                                "x": 1073,
+                                "y": 11 
+                            }
+                        ] 
+                    },       
+                    
+                    {
+                        "name": "west",
+                        "poly": [
+                            {
+                                "x": 1407,
+                                "y": 223 
+                            },
+                            {
+                                "x": 1751,
+                                "y": 555 
+                            },
+                            {
+                                "x": 1905,
+                                "y": 505 
+                            },
+                            {
+                                "x": 1893,
+                                "y": 246 
+                            }
+                        ] 
+                    },      
+                    
+                    {
+                        "name": "east",
+                        "poly": [
+                            {
+                                "x": 14,
+                                "y": 227 
+                            },
+                            {
+                                "x": 26,
+                                "y": 688 
+                            },
+                            {
+                                "x": 614,
+                                "y": 565 
+                            },
+                            {
+                                "x": 602,
+                                "y": 160 
+                            }
+                        ] 
+                    },      
+                    
+                    {
+                        "name": "east",
+                        "poly": [
+                            {
+                                "x": 598,
+                                "y": 244 
+                            },
+                            {
+                                "x": 596,
+                                "y": 521 
+                            },
+                            {
+                                "x": 1600,
+                                "y": 460 
+                            },
+                            {
+                                "x": 1337,
+                                "y": 180 
+                            }
+                        ] 
+                    }
+                ]
+            }
+            const SOCKET_URL = 'ws://localhost:8000/ws/chat/' + SOCKET_NAME + '/'
+            
+            var CHAT_SOCKET = null;
+            let VIDEO_STATUS = "NO_VIDEO"
+                    
+            const QUEUED = "Queued"
+            const PROCESSING = "Processing"
+            const FINISHED = "Finished"
             async function test(ev){
                 
                 let photo = ev.files[0];      
                     
                 let formdata = new FormData();
-                console.log(photo)
                 formdata.append("myfile", ev.files[0]);
 
-                formdata.append("json", "{\n	\"username\":\"adrian\",\n	\"zones\": [\n		{\n			\"name\": \"as\",\n			\"poly\": [\n				{\n					\"x\": 100,\n					\"y\": 246 \n				},\n				{\n					\"x\": 150,\n					\"y\": 200 \n				},\n				{\n					\"x\": 100,\n					\"y\": 246 \n				}\n			] \n		},\n		{\n			\"name\": \"sas\",\n			\"poly\": [\n				{\n					\"x\": 100,\n					\"y\": 246 \n				},\n				{\n					\"x\": 100,\n					\"y\": 246 \n				},\n				{\n					\"x\": 150,\n					\"y\": 200 \n				}\n			] \n		}\n	]\n}");
+                formdata.append("json", JSON.stringify( data_out_example));
                
                 var requestOptions = {
                     method: 'POST',
@@ -32,20 +153,20 @@
                 if(response.ok)
                     response.text().then(result => {
                         console.log(result)
-                        ConnectSocket(SOCKET_NAME)
+                        ConnectSocket()
                     })
                 else
                     response.text().then(error => {throw new Error(error)})
             }
-            function ConnectSocket(socketName){
-               
+            function ConnectSocket(){              
                 
-                const CHAT_SOCKET = new WebSocket('ws://localhost:8000/ws/chat/' + socketName + '/');
+                CHAT_SOCKET = new WebSocket(SOCKET_URL);
                 
                 // Conectado
                 CHAT_SOCKET.addEventListener('open', () => {
                     console.log('Conectado');
-                    sendMessage("empezando esta monda!",CHAT_SOCKET)
+                    VIDEO_STATUS = QUEUED
+                    setTimeout(videoOnQueue,100)
                 });
                 // Desconectado
                 CHAT_SOCKET.addEventListener('close', () => {
@@ -54,8 +175,14 @@
 
                 // Recibir mensaje
                 CHAT_SOCKET.addEventListener('message', (event) => {
-
-                    console.log(event.data*100);
+                    let data = JSON.parse(event.data)
+                    if(data.type == "info"){
+                        VIDEO_STATUS = data.message 
+                    }
+                    else if(data.type == "proccess"){
+                        console.log(data.message)
+                    }
+                    console.log(data)
                     
                 });
 
@@ -63,7 +190,7 @@
             
             function askVideoQueued(){
                 let formdata = new FormData();
-                formdata.append("username", "adrian");
+                formdata.append("username", SOCKET_NAME);
 
                 let requestOptions = {
                 method: 'POST',
@@ -75,19 +202,25 @@
                 .then(response => response.text())
                 .then(result => {
                     result=JSON.parse(result)
-                    console.log(result)
                     if(result.queued_video)
-                        ConnectSocket(SOCKET_NAME)
+                        ConnectSocket()
                 })
                 .catch(error => console.log('error', error));
             }
-            function sendMessage(mensaje,CHAT_SOCKET) {
-                // Envia al WebSocket un nuevo mensaje
-                CHAT_SOCKET.send(JSON.stringify({
-                    polys: [],
-                    nombre: "hello",
-                    mensaje: mensaje
-                }));
+            
+            function videoOnQueue(){
+                
+              
+                if(VIDEO_STATUS==QUEUED){
+                    CHAT_SOCKET.send(JSON.stringify({
+                        type: "info",
+                        message: "",
+                        username: SOCKET_NAME
+                    }));
+                    setTimeout(videoOnQueue,1000)
+                }
+                else if(VIDEO_STATUS==PROCESSING)
+                    console.log("video starting to procces")
             }
 
             askVideoQueued()

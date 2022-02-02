@@ -13,7 +13,7 @@ from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 
 from manager.models import AfarmentDataDB, DetectionDB
-
+import json
 #YOLOV5s
 
 # STRUCT_DATA =   {
@@ -168,10 +168,11 @@ class AfarmentDataManager:
 
 
 class DetectionManager:
-    def __init__(self,video, polys):
+    def __init__(self,video, polys,ws):
         self.frame_ammount = -1
         self.fps = -1
         self.video = video
+        self.ws = ws
         self.zoneconfig = ZoneConfig(polys)    
         self.global_counter=0
         self.global_frame = -1
@@ -237,10 +238,7 @@ class DetectionManager:
                 max_frame_class_idx = idx
 
         if max_frame_class != -1:
-            detection.class_id = max_frame_class_idx
-        
-
-       
+            detection.class_id = max_frame_class_idx       
             
         detection.is_lost=True
         
@@ -248,32 +246,7 @@ class DetectionManager:
         # SET ORIENTATION
         detection.orientation = detection.input_zone+detection.output_zone
         print(detection.orientation)
-        # # IN    
-        # first_img_zones = self.zoneconfig.draw_zones(detection.first_image)
-        # p1, p2 = (int(first_bbox[0]), int(first_bbox[1])), (int(first_bbox[2]), int(first_bbox[3]))
-        # cv2.rectangle(first_img_zones, p1, p2, (0,255,0), 2, cv2.LINE_AA)                 
-        # cv2.putText(
-        #     first_img_zones,
-        #     detection.frames_counter_class[class_id]["name"], 
-        #     p1,0, 2, (0,0,255),thickness=3, 
-        #     lineType=cv2.LINE_AA
-        # )
-        # first_img_zones = cv2.circle(first_img_zones,(int((p2[0]+p1[0])/2), int((p2[1]+p1[1])/2)), radius=5, color=(0, 0, 255), thickness=-1)
-        # cv2.imwrite(f"{self.data_path}{detection.orientation}/"+classes[class_id]["name"]+"/"+str(detection.id)+"_in.jpg",first_img_zones)
-        # # OUT     
-        # last_img_zones = self.zoneconfig.draw_zones(detection.last_image)
-        # p1, p2 = (int(last_bbox[0]), int(last_bbox[1])), (int(last_bbox[2]), int(last_bbox[3]))
-        # cv2.rectangle(last_img_zones, p1, p2, (0,0,255), 2, cv2.LINE_AA) 
-        # cv2.putText(
-        #     last_img_zones,
-        #     detection.frames_counter_class[detection.class_id]["name"], 
-        #     p1,0, 2, (0,0,255),thickness=3, 
-        #     lineType=cv2.LINE_AA
-        # )
-        # last_img_zones = cv2.circle(last_img_zones,(int((p2[0]+p1[0])/2), int((p2[1]+p1[1])/2)), radius=5, color=(0, 0, 255), thickness=-1)
-      
-        # cv2.imwrite(f"{self.data_path}{detection.orientation}/"+classes[class_id]["name"]+"/"+str(detection.id)+"_out.jpg",last_img_zones)
-
+     
     def obj_lost(self,track_id,class_id):
         new_det = []
         for detection in self.detections:
@@ -309,16 +282,21 @@ class DetectionManager:
         
     def object_detectable(self, bbox):        
         point = [int((bbox[0]+bbox[2])/2),int((bbox[1]+bbox[3])/2)]      
-        for zone_obj in self.zoneconfig:           
-            zone = Polygon( [[poly_point["x"],poly_point["y"]] for poly_point in zone_obj["poly"]] )
+        for zone_obj in self.zoneconfig.polys:           
+            zone = Polygon( [[poly_point["x"],poly_point["y"]] for poly_point in zone_obj.poly] )
             if zone.contains( Point( point)  ):                    
-                return {"zone":zone_obj["name"], "detectable":True}
+                return {"zone":zone_obj.name, "detectable":True}
        
         return {"zone":"NO ZONE", "detectable":False}
 
     def update(self,bbox,track_id,class_id,img,is_lost,frame_idx):    
         self.global_frame+=1
-        # self.ws.send(str(self.global_frame/self.frame_ammount))
+        to_ws = {
+            "type":"proccess",
+            "message":(self.global_frame/self.frame_ammount)*100,
+            "username":"detector"
+        }
+        self.ws.send(json.dumps(to_ws))
         if len(self.detections)>0 and self.count_timer + datetime.timedelta( minutes = TEMP_FINISH_TIMER_MINUTES, seconds=TEMP_FINISH_TIMER_SECONDS) < datetime.datetime.now():
             self.count_timer = datetime.datetime.now()
             new_det = []
