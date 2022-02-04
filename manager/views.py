@@ -1,21 +1,20 @@
 from django.shortcuts import render
-from django.core.exceptions import MultipleObjectsReturned
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-from .models import Video, VideoOwner, ZoneConfigDB, Zone
+from .models import Video, ZoneConfigDB, Zone
 import json
 from .tasks import video_to_queue
 # Create your views here.
-@csrf_exempt 
-def app_save(request):
-    if request.method == 'POST':
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated  # <-- Here
 
+class UploadVideo(APIView):
+    
+    permission_classes = (IsAuthenticated,)
+    def post(self, request):
         data = json.loads(request.POST.get('json'))
-        response  = HttpResponse("-")
-        if not "username" in data:
-            response.status_code = 400
-            response.content = "need to tell 'username'"
-            return response
+        response  = Response("-")
 
         if "zones" in data:
             if "zones" in data:
@@ -40,7 +39,7 @@ def app_save(request):
             return response
 
       
-        owner, created = VideoOwner.objects.get_or_create(name=data["username"])
+        owner = request.user
 
         
         
@@ -48,7 +47,7 @@ def app_save(request):
 
         if len(video)>0:           
             response.status_code = 200
-            response.content = f"User already has 1 video, please connect to socket room {data['username']}"   
+            response.content = f"User already has 1 video, please connect to socket room "   
             return response
         else:
             video = Video(owner=owner, status = Video.QUEUED,video_link=request.FILES.get('myfile'))
@@ -61,37 +60,41 @@ def app_save(request):
                 Zone(zone_config = zone_config, name = zone["name"], poly = zone["poly"]).save()
 
             response.status_code = 200
-            response.content = "Your video is on queued please connect to the socket."
+            response.content = json.dumps({"video_pk": video.pk,"message":"Your video is on queued please connect to the socket."})
          
             task_on_queue = video_to_queue.delay(video.pk)
             video.task_id = task_on_queue.id
             video.save()
             return response
 
-        # app/front/views.py
 
-@csrf_exempt 
-def user_status(request):
-    if request.method == 'POST':
+class VideoStatus(APIView):
+    
+    def post(self, request):
+        print(request.user)
         
-        username = request.POST.get('username')
-        owner, created = VideoOwner.objects.get_or_create(name=username)
+        owner = request.user
         response_content = {
-            "queued_video":False,
+            "status":"NO_VID",
             "message":"user can request to upload video"
         }
         
         
-        if not created:
-            
-            video = Video.objects.filter(owner=owner).exclude( status = Video.FINISHED)
+        video = Video.objects.filter(owner=owner).exclude( status = Video.FINISHED)
 
-            if len(video)>0:  
-                response_content["queued_video"] = True   
-                response_content["message"]  =  f"User already has 1 video, please connect to socket room {username}"   
+        if len(video)>0:  
+            print(video)
+            response_content["status"] = video[0].status
+            if video[0].status == video[0].PROCESSING:
+                response_content["message"]  =  f"User already has 1 video proccesing, please connect to socket room "   
         
+            elif video[0].status == video[0].QUEUED:
+                response_content["message"]  =  f"User already has 1 video on queue."   
+        else:
+            
+            print("not video")
 
-        response  = HttpResponse("-")
+        response  = Response("-")
         response.status_code = 200
         response.content = json.dumps(response_content)
         return response

@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.postgres.fields import ArrayField, JSONField
+from django.contrib.auth.models import User
 # Create your models here.
         
 DEFAULT_POLY = {
@@ -48,11 +49,6 @@ DEFAULT_FRAMES_COUNTER_CLASS={
 }
 
 
-
-
-class VideoOwner(models.Model):
-    name = models.CharField(max_length=64, unique = True)
-
 class Video(models.Model):
     QUEUED = "Queued"
     PROCESSING = "Processing"
@@ -64,7 +60,7 @@ class Video(models.Model):
         (FINISHED, "Finished"),
     )
 
-    owner = models.ForeignKey(VideoOwner, on_delete=models.CASCADE ) 
+    owner = models.ForeignKey(User, on_delete=models.CASCADE ) 
     video_link = models.FileField(db_index=True, upload_to='not_used')
     frame_ammount = models.IntegerField(default=-1)
     frame_processed = models.IntegerField(default=0)

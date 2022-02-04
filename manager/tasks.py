@@ -36,8 +36,8 @@ class Options:
 class Websockets:
 
     def __init__(self,username,video,polys):
-        websocket.enableTrace(True)
-        ws = websocket.WebSocketApp(f"ws://localhost:8000/ws/chat/{username}/",
+        websocket.enableTrace(False)
+        ws = websocket.WebSocketApp(f"ws://localhost:8000/ws/chat/video/",
                             on_open=self.on_open,
                             on_message=self.on_message,
                             on_error=self.on_error,
@@ -70,10 +70,9 @@ class Websockets:
 @shared_task
 def video_to_queue(video_pk):
     video = Video.objects.get(pk=video_pk)
-    print(video,video.zoneconfigdb_set.all())
     polys = video.zoneconfigdb_set.all()[0].zone_set.all()
-    print(polys)
-    Websockets(video.owner.name,video,polys)
+
+    Websockets(video.owner.username,video,polys)
     video.status = video.FINISHED
     video.save()
     return "finish"

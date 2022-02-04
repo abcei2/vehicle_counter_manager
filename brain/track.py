@@ -156,8 +156,12 @@ def detect(opt, detection_manager):
                 deepsort.increment_ages()
             # Stream results
             im0 = annotator.result()
-            cv2.imshow("Image",im0)
-            cv2.waitKey(10)
+            detection_manager.get_status()
+            print(detection_manager.video.status,"asdfas",detection_manager.video.PROCESSING)
+            if detection_manager.video.status != detection_manager.video.PROCESSING:
+                return
+            # cv2.imshow("Image",im0)
+            # cv2.waitKey(10)
 
       
 

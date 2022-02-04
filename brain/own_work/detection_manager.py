@@ -12,8 +12,9 @@ from itertools import permutations
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 
-from manager.models import AfarmentDataDB, DetectionDB
+from manager.models import AfarmentDataDB, DetectionDB, Video
 import json
+import time
 #YOLOV5s
 
 # STRUCT_DATA =   {
@@ -184,12 +185,6 @@ class DetectionManager:
         self.ref_frame = None
         self.orientation = None
         self.data_path = "data/"
-        # perm_zones = list(permutations(zones, 2))
-        # for idx in classes.keys():
-        #     for orientation in perm_zones:
-                
-        #         os.makedirs(f"{self.data_path}{orientation[0][0]}{orientation[1][0]}/"+classes[idx]["name"], exist_ok=True)
-            
 
     def obj_new(self,track_id,class_id, bbox,img,frame_idx):
         self.object_detectable(bbox)
@@ -297,6 +292,7 @@ class DetectionManager:
             "username":"detector"
         }
         self.ws.send(json.dumps(to_ws))
+        
         if len(self.detections)>0 and self.count_timer + datetime.timedelta( minutes = TEMP_FINISH_TIMER_MINUTES, seconds=TEMP_FINISH_TIMER_SECONDS) < datetime.datetime.now():
             self.count_timer = datetime.datetime.now()
             new_det = []
@@ -319,4 +315,15 @@ class DetectionManager:
 
         self.obj_new(track_id,class_id,bbox,img,frame_idx)
    
+    def get_status(self):
+        self.video=Video.objects.get(pk=self.video.pk)
+        to_ws = {
+            "type":"proccess",
+            "message":(self.global_frame/self.frame_ammount)*100,
+            "username":"detector"
+        }
+        if self.video.status != self.video.PROCESSING:
+            to_ws["type"] = "end"
+        self.ws.send(json.dumps(to_ws))
+        
 

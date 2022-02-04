@@ -2,12 +2,12 @@
 <html lang="es">
     <body>
       
-        <input id="image-file" type="file" onchange="test(this)" >
+        <input id="image-file" type="file" onchange="UploadVideo(this)" >
         <script>
             
-            const SOCKET_NAME = "santi2"
+            const USER_NAME = "perro_mueco_loco2"
             const data_out_example = {
-                "username":SOCKET_NAME,
+                "username":USER_NAME,
                 "zones": [
                     {
                         "name": "north",
@@ -120,7 +120,10 @@
                     }
                 ]
             }
-            const SOCKET_URL = 'ws://localhost:8000/ws/chat/' + SOCKET_NAME + '/'
+            // LOGIN!
+               ///////////////////
+
+            const SOCKET_URL = 'ws://localhost:8000/ws/chat/' + USER_NAME + '/'
             
             var CHAT_SOCKET = null;
             let VIDEO_STATUS = "NO_VIDEO"
@@ -128,7 +131,43 @@
             const QUEUED = "Queued"
             const PROCESSING = "Processing"
             const FINISHED = "Finished"
-            async function test(ev){
+            var VIDEO_PK = null
+            var LogginHeaders = new Headers();
+            var QueryHeaders = new Headers();
+            var myToken = null
+            LogginHeaders.append("Content-Type", "application/json");
+
+            var raw = JSON.stringify({
+            "username": "pc",
+            "password": "admin"
+            });
+            console.log(raw)
+            var requestOptions = {
+            method: 'POST',
+            headers: LogginHeaders,
+            body: raw,
+            redirect: 'follow'
+            };
+
+            fetch("http://localhost:8000/login", requestOptions)
+            .then(response => {
+                if(response.ok)
+                    response.text().then(result => {
+                        // WHEN LOGIN THEN TAKE TOKEN AND APPEND TO HEADERS!
+                        result = JSON.parse(result)
+                        console.log(result,"LOGGED!")
+                        myToken = "token "+result.token
+                        QueryHeaders = new Headers();
+                        QueryHeaders.append("Authorization", myToken);
+                        setTimeout(askVideoStatus,100)
+                    })
+                else
+                    response.text().then(error => {throw new Error(error)})   
+                
+            })
+            .catch(error => console.log('error', error));
+         
+            async function UploadVideo(ev){
                 
                 let photo = ev.files[0];      
                     
@@ -138,22 +177,20 @@
                 formdata.append("json", JSON.stringify( data_out_example));
                
                 var requestOptions = {
-                    method: 'POST',
+                    method: 'POST',                   
+                    headers: QueryHeaders,
                     body: formdata,
                     redirect: 'follow'
                 };
 
                 fetch("http://localhost:8000", requestOptions)
                 .then(response => EvalResponse(response))
-                .then(
-                )
                 .catch(error => console.log('error', error));
             }
             function EvalResponse(response){
                 if(response.ok)
-                    response.text().then(result => {
+                    response.json().then(result => {                        
                         console.log(result)
-                        ConnectSocket()
                     })
                 else
                     response.text().then(error => {throw new Error(error)})
@@ -165,8 +202,6 @@
                 // Conectado
                 CHAT_SOCKET.addEventListener('open', () => {
                     console.log('Conectado');
-                    VIDEO_STATUS = QUEUED
-                    setTimeout(videoOnQueue,100)
                 });
                 // Desconectado
                 CHAT_SOCKET.addEventListener('close', () => {
@@ -176,11 +211,10 @@
                 // Recibir mensaje
                 CHAT_SOCKET.addEventListener('message', (event) => {
                     let data = JSON.parse(event.data)
-                    if(data.type == "info"){
-                        VIDEO_STATUS = data.message 
-                    }
-                    else if(data.type == "proccess"){
+                    if(data.type == "proccess"){
                         console.log(data.message)
+                    }else if(data.type == "end"){
+                        CHAT_SOCKET.close()
                     }
                     console.log(data)
                     
@@ -188,12 +222,13 @@
 
             }
             
-            function askVideoQueued(){
+            function askVideoStatus(){
                 let formdata = new FormData();
-                formdata.append("username", SOCKET_NAME);
+                formdata.append("username", USER_NAME);
 
                 let requestOptions = {
-                method: 'POST',
+                method: 'POST',            
+                headers: QueryHeaders,
                 body: formdata,
                 redirect: 'follow'
                 };
@@ -202,28 +237,15 @@
                 .then(response => response.text())
                 .then(result => {
                     result=JSON.parse(result)
-                    if(result.queued_video)
+                    if(result.status==PROCESSING)
                         ConnectSocket()
+                    else                    
+                        setTimeout(askVideoStatus,1000)
+                    console.log(result)                
                 })
                 .catch(error => console.log('error', error));
             }
             
-            function videoOnQueue(){
-                
-              
-                if(VIDEO_STATUS==QUEUED){
-                    CHAT_SOCKET.send(JSON.stringify({
-                        type: "info",
-                        message: "",
-                        username: SOCKET_NAME
-                    }));
-                    setTimeout(videoOnQueue,1000)
-                }
-                else if(VIDEO_STATUS==PROCESSING)
-                    console.log("video starting to procces")
-            }
-
-            askVideoQueued()
         </script>
     </body>
 </html>
