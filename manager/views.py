@@ -99,5 +99,5 @@ class VideoStatus(APIView):
         response.content = json.dumps(response_content)
         return response
     
-def chat(request):
-    return render(request, 'chat.html')
+def testview(request):
+    return render(request, 'testview.html')

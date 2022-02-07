@@ -2,7 +2,7 @@
 <html lang="es">
     <body>
       
-        <input id="image-file" type="file" onchange="UploadVideo(this)" >
+        <input id="videoinput" type="file" onchange="UploadVideo(this)" >
         <script>
             
             const USER_NAME = "perro_mueco_loco2"
@@ -122,37 +122,43 @@
             }
             // LOGIN!
                ///////////////////
-
-            const SOCKET_URL = 'ws://localhost:8000/ws/chat/' + USER_NAME + '/'
+            const HOST_URL = 'http://207.246.118.54/'
+            const WS_HOST_URL = 'ws://207.246.118.54/'
+            const SOCKET_URL = WS_HOST_URL+'ws/chat/' + USER_NAME + '/'
             
-            var CHAT_SOCKET = null;
+            var ROOM_SOCKET = null;
+            
             let VIDEO_STATUS = "NO_VIDEO"
-                    
-            const QUEUED = "Queued"
+
+            let UPLOADING_FILE = false;
             const PROCESSING = "Processing"
             const FINISHED = "Finished"
             var VIDEO_PK = null
-            var LogginHeaders = new Headers();
             var QueryHeaders = new Headers();
-            var myToken = null
-            LogginHeaders.append("Content-Type", "application/json");
 
+            //LOGING; GETTING TOKEN
+            var myToken = null
+            var LogginHeaders = new Headers();
+            LogginHeaders.append("Content-Type", "application/json");
+            
             var raw = JSON.stringify({
             "username": "pc",
             "password": "admin"
             });
-            console.log(raw)
+            
             var requestOptions = {
-            method: 'POST',
-            headers: LogginHeaders,
-            body: raw,
-            redirect: 'follow'
+                method: 'POST',
+                headers: LogginHeaders,
+                body: raw,
+                redirect: 'follow'
             };
 
-            fetch("http://localhost:8000/login", requestOptions)
+            fetch(HOST_URL+"login", requestOptions)
             .then(response => {
                 if(response.ok)
                     response.text().then(result => {
+                        
+                        document.getElementById("videoinput").disabled = false
                         // WHEN LOGIN THEN TAKE TOKEN AND APPEND TO HEADERS!
                         result = JSON.parse(result)
                         console.log(result,"LOGGED!")
@@ -161,16 +167,19 @@
                         QueryHeaders.append("Authorization", myToken);
                         setTimeout(askVideoStatus,100)
                     })
-                else
+                else{
+                    document.getElementById("videoinput").disabled = true
                     response.text().then(error => {throw new Error(error)})   
+                }
+                    
                 
             })
             .catch(error => console.log('error', error));
          
             async function UploadVideo(ev){
-                
+                if (myToken == null)
+                    return
                 let photo = ev.files[0];      
-                    
                 let formdata = new FormData();
                 formdata.append("myfile", ev.files[0]);
 
@@ -183,11 +192,33 @@
                     redirect: 'follow'
                 };
 
-                fetch("http://localhost:8000", requestOptions)
-                .then(response => EvalResponse(response))
-                .catch(error => console.log('error', error));
+                var request = new XMLHttpRequest();
+                request.open('POST', HOST_URL); 
+                request.setRequestHeader("Authorization", myToken)
+                
+                // upload progress event
+                request.upload.addEventListener('progress', function(e) {
+                    // upload progress as percentage
+                    let percent_completed = (e.loaded / e.total)*100;
+                    console.log("uploadidng video: "+percent_completed+"%");
+                });
+
+                // request finished event
+                request.addEventListener('load', function(e) {
+                    console.log(request.status);
+                    console.log(request.response);
+                    UPLOADING_FILE = false
+                }); 
+
+                // send POST request to server
+                request.send(formdata);
+                UPLOADING_FILE = true
+
             }
+            
             function EvalResponse(response){
+                
+                
                 if(response.ok)
                     response.json().then(result => {                        
                         console.log(result)
@@ -197,24 +228,24 @@
             }
             function ConnectSocket(){              
                 
-                CHAT_SOCKET = new WebSocket(SOCKET_URL);
+                ROOM_SOCKET = new WebSocket(SOCKET_URL);
                 
                 // Conectado
-                CHAT_SOCKET.addEventListener('open', () => {
+                ROOM_SOCKET.addEventListener('open', () => {
                     console.log('Conectado');
                 });
                 // Desconectado
-                CHAT_SOCKET.addEventListener('close', () => {
+                ROOM_SOCKET.addEventListener('close', () => {
                     console.log('Desconectado');
                 });
 
                 // Recibir mensaje
-                CHAT_SOCKET.addEventListener('message', (event) => {
+                ROOM_SOCKET.addEventListener('message', (event) => {
                     let data = JSON.parse(event.data)
                     if(data.type == "proccess"){
                         console.log(data.message)
                     }else if(data.type == "end"){
-                        CHAT_SOCKET.close()
+                        ROOM_SOCKET.close()
                     }
                     console.log(data)
                     
@@ -233,15 +264,18 @@
                 redirect: 'follow'
                 };
 
-                fetch("http://localhost:8000/estado", requestOptions)
+                fetch(HOST_URL+"estado", requestOptions)
                 .then(response => response.text())
                 .then(result => {
                     result=JSON.parse(result)
                     if(result.status==PROCESSING)
                         ConnectSocket()
-                    else                    
+                    else 
                         setTimeout(askVideoStatus,1000)
-                    console.log(result)                
+                    
+                    if(!UPLOADING_FILE)
+                        console.log(result)                
+                    
                 })
                 .catch(error => console.log('error', error));
             }
