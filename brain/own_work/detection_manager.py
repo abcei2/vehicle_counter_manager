@@ -285,13 +285,7 @@ class DetectionManager:
         return {"zone":"NO ZONE", "detectable":False}
 
     def update(self,bbox,track_id,class_id,img,is_lost,frame_idx):    
-        self.global_frame+=1
-        to_ws = {
-            "type":"proccess",
-            "message":(self.global_frame/self.frame_ammount)*100,
-            "username":"detector"
-        }
-        self.ws.send(json.dumps(to_ws))
+        
         
         if len(self.detections)>0 and self.count_timer + datetime.timedelta( minutes = TEMP_FINISH_TIMER_MINUTES, seconds=TEMP_FINISH_TIMER_SECONDS) < datetime.datetime.now():
             self.count_timer = datetime.datetime.now()

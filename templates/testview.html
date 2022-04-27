@@ -121,9 +121,9 @@
                 ]
             }
             // LOGIN!
-               ///////////////////
-            const HOST_URL = 'http://207.246.118.54/'
-            const WS_HOST_URL = 'ws://207.246.118.54/'
+            ///////////////////
+            const HOST_URL = 'http://localhost:8000/'
+            const WS_HOST_URL = 'ws://localhost:8000/'
             const SOCKET_URL = WS_HOST_URL+'ws/chat/' + USER_NAME + '/'
             
             var ROOM_SOCKET = null;
@@ -133,7 +133,6 @@
             let UPLOADING_FILE = false;
             const PROCESSING = "Processing"
             const FINISHED = "Finished"
-            var VIDEO_PK = null
             var QueryHeaders = new Headers();
 
             //LOGING; GETTING TOKEN
@@ -264,7 +263,7 @@
                 redirect: 'follow'
                 };
 
-                fetch(HOST_URL+"estado", requestOptions)
+                fetch(HOST_URL+"status", requestOptions)
                 .then(response => response.text())
                 .then(result => {
                     result=JSON.parse(result)

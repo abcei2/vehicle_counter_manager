@@ -1,17 +1,21 @@
 from celery import shared_task
 import time
 import subprocess
-import cv2
 import json
 import time
-from brain.track import detect
-from brain.own_work.detection_manager import DetectionManager
 import argparse
-import torch
 from manager.models import Video
 
 import websocket
 import _thread
+
+
+DETECT = False
+if DETECT:
+    import cv2
+    from brain.track import detect
+    from brain.own_work.detection_manager import DetectionManager
+    import torch
 
 class Options:
     def __init__(self):
@@ -44,6 +48,8 @@ class Websockets:
                             on_close=self.on_close)     
         self.video = video
         self.polys = polys
+        self.max = 100
+        self.counter = 0
         ws.run_forever()
 
     def on_message(self, ws, message):
@@ -59,11 +65,19 @@ class Websockets:
         def run(*args):
             self.video.status = self.video.PROCESSING
             self.video.save()
-
-            detection_manager = DetectionManager(self.video,self.polys,ws)
-            with torch.no_grad():
-                detect(Options(), detection_manager)
-            time.sleep(1)
+            if DETECT:
+                detection_manager = DetectionManager(self.video,self.polys,ws)
+                with torch.no_grad():
+                    detect(Options(), detection_manager)
+            while(self.counter<self.max):
+                self.counter+=1
+                to_ws = {
+                    "type":"proccess",
+                    "message":(self.counter/self.max)*100,
+                    "username":"detector"
+                }
+                ws.send(json.dumps(to_ws))
+                time.sleep(0.05)
             ws.close()
         _thread.start_new_thread(run, ())
 

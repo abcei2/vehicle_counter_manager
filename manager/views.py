@@ -69,6 +69,7 @@ class UploadVideo(APIView):
 
 
 class VideoStatus(APIView):
+    permission_classes = (IsAuthenticated,)
     
     def post(self, request):
         print(request.user)

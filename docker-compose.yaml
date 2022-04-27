@@ -12,25 +12,28 @@ services:
     ports:
       - 5432:5432
 
-  # web:
-  #   build: .
-  #   command: bash -c "while !</dev/tcp/db/5432; do sleep 1; done;python manage.py makemigrations && python manage.py migrate django_celery_results && python manage.py runserver 0.0.0.0:8000"
-  #   devices:
-  #     - capabilities: [gpu]
-  #   volumes:
-  #     - .:/code
-  #   ports:
-  #     - "8000:8000"
-  #   environment:
-  #     POSTGRES_DB: vehicle_counter
-  #     POSTGRES_USER: postgres
-  #     POSTGRES_PASSWORD: postgres
-  #   depends_on:
-  #     - db
-   
-    #REDIS
+  #REDIS
   redis:
     image: redis:alpine
     restart: always
     ports:
       - 6379:6379
+
+  
+  web:
+    build: .
+    command: bash -c "while !</dev/tcp/db/5432; do sleep 5; done;python manage.py makemigrations && python manage.py migrate django_celery_results && python manage.py runserver 0.0.0.0:8000"
+    # devices:
+    #   - capabilities: [gpu]
+    volumes:
+      - .:/code
+    ports:
+      - "8000:8000"
+    environment:
+      POSTGRES_DB: vehicle_counter
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    depends_on:
+      - db
+      - redis
+   

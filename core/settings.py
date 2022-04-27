@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',  
 
+    "corsheaders",
     'channels',
     'manager',
 ]
@@ -49,11 +50,15 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+
+    "corsheaders.middleware.CorsMiddleware",
+
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    
 ]
 
 ROOT_URLCONF = 'core.urls'
@@ -82,13 +87,10 @@ TEMPLATES = [
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        # 'NAME': os.environ.get('POSTGRES_DB'),
-        # 'USER': os.environ.get('POSTGRES_USER'),
-        # 'PASSWORD': os.environ.get('POSTGRES_PASSWORD'),
-        'NAME': 'vehicle_counter',
-        'USER': 'postgres',
-        'PASSWORD': 'postgres',
-        'HOST': 'localhost',
+        'NAME': os.environ.get('POSTGRES_DB'),
+        'USER': os.environ.get('POSTGRES_USER'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD'),
+        'HOST': 'db',
         'PORT': '5432',
     }
 }
@@ -150,6 +152,7 @@ CHANNEL_LAYERS = {
         },
     },
 }
+MAX_UPLOAD_SIZE = 524288000
 ASGI_APPLICATION = "asgi.application"
 
 REST_FRAMEWORK = {
@@ -157,3 +160,9 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.TokenAuthentication',  # <-- And here
     ],
 }
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://207.246.118.54:3001",
+    "http://207.246.118.54"
+]
