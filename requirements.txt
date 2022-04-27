@@ -8,4 +8,5 @@ channels
 channels_redis
 djangorestframework
 django-cors-headers
-websocket
+websocket-client
+gevent

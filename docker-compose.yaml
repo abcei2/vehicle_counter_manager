@@ -12,17 +12,10 @@ services:
     ports:
       - 5432:5432
 
-  #REDIS
-  redis:
-    image: redis:alpine
-    restart: always
-    ports:
-      - 6379:6379
-
-  
   web:
     build: .
-    command: bash -c "while !</dev/tcp/db/5432; do sleep 5; done;python manage.py makemigrations && python manage.py migrate django_celery_results && python manage.py runserver 0.0.0.0:8000"
+    container_name: django-web
+    command: bash -c "while !</dev/tcp/db/5432; do sleep 15; done; python manage.py runserver 0.0.0.0:8000"
     # devices:
     #   - capabilities: [gpu]
     volumes:
@@ -35,5 +28,26 @@ services:
       POSTGRES_PASSWORD: postgres
     depends_on:
       - db
-      - redis
-   
+  #REDIS
+  redis:
+    image: redis:alpine
+    restart: always
+    ports:
+      - 6379:6379
+  # celery:
+  #   restart: always
+  #   build:
+  #     context: .
+  #   command: celery -A core worker -l info
+  #   volumes:
+  #     - ./core:/core
+  #   environment:
+  #     POSTGRES_DB: vehicle_counter
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: postgres
+  #   depends_on:
+  #     - db
+  #     - redis
+  #     - web
+
+  

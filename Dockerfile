@@ -3,7 +3,7 @@ FROM nvcr.io/nvidia/pytorch:21.12-py3
 ENV DEBIAN_FRONTEND=noninteractive 
 RUN apt update 
 RUN apt-get install ffmpeg libsm6 libxext6  -y
-
+RUN apt-get install libffi-dev
 WORKDIR /code
 COPY requirements.txt /code/
 RUN pip install -r requirements.txt
