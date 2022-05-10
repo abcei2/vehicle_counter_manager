@@ -1,10 +1,9 @@
 import pandas as pd
 import datetime
-import cv2
 import copy
 import numpy as np
+import cv2
 import torch
-from .zone_manager import ZoneConfig
 from brain.yolov5.utils.general import scale_coords
 import os
 from itertools import permutations
@@ -15,31 +14,10 @@ from shapely.geometry.polygon import Polygon
 from manager.models import AfarmentDataDB, DetectionDB, Video
 import json
 import time
-#YOLOV5s
 
-# STRUCT_DATA =   {
-#     'track_id': None, 
-#     'class_id': None, 
-#     'score': None, 
-#     'first_bbox': None, 
-#     'last_bbox': None,
-#     'input_zone': None,
-#     'output_zone':None,
-#     'frames_counter':None,
-#     'is_lost':None,
-#     'person':0,
-#     'bicycle':0,
-#     'car':0,
-#     'motorcycle':0,
-#     'bus':0,
-#     'truck':0,    
-#     'detection_time':None,
-    
-#     'last_detection_time':None
-#     }
-
-TEMP_FINISH_TIMER_MINUTES = 0
-TEMP_FINISH_TIMER_SECONDS = 30
+TEMP_FINISH_TIMER_MINUTES = 10
+TEMP_FINISH_TIMER_SECONDS = 0
+MIN_FRAME_DETECTION_AMOUNT = 10
 
 
 classes ={
@@ -62,6 +40,15 @@ classes ={
         "name":"truck",
     }           
 }
+
+
+     
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
+
 class Detection:
     def __init__(self,
         id, track_id, class_id, first_bbox,
@@ -114,73 +101,18 @@ class Detection:
         self.detection_time = datetime.datetime.now()
         self.last_detection_time = None     
 
-class AfarmentData: 
-    def __init__(self, class_id, name, maneuver, ammount):
-        self.class_id = class_id
-        self.name = name
-        self.maneuver = maneuver
-        self.ammount = ammount
-        
-class AfarmentDataManager: 
-       
-    def __init__(self, detections,count_timer, video, zoneconfig):
-
-
-        dets_dict = []
-        for detection in detections:    
-        
-            det_dict = copy.deepcopy(detection.__dict__)
-         
-            det_dict.pop("first_image")
-            det_dict.pop("last_image")
-            dets_dict.append(det_dict)
-        print(zoneconfig.polys)
-        zones=[poly.name for poly in zoneconfig.polys]
-        detections_df = pd.DataFrame(dets_dict)
-        perm_zones = list(permutations(zones, 2))
-
-        afarment_data_list=[]
-        for orientation in perm_zones:     
-            for idx in classes.keys():
-                ammount = len(detections_df.loc[(detections_df['class_id'] == idx) & (detections_df['input_zone'] == orientation) & (detections_df['output_zone'] == orientation)])
-                afarment_data_list.append(AfarmentData(idx,classes[idx]["name"],orientation+orientation,ammount))
-                   
-        for afarment_data in afarment_data_list:            
-            AfarmentDataDB(
-                video = video,
-                class_id = afarment_data.class_id,
-                ammount = afarment_data.ammount, 
-                maneuver = afarment_data.maneuver,
-                class_name = afarment_data.name
-            ).save()
-            
-        for detection in detections:    
-            DetectionDB(
-            video = video,
-            class_id = detection.class_id,
-            last_bbox= list(detection.last_bbox),
-            first_bbox = list(detection.first_bbox),
-            input_zone = detection.input_zone ,
-            output_zone = detection.output_zone,
-            dist_btw_bbox = detection.dist_btw_bbox ,
-            frames_counter = detection.frames_counter,
-            last_frame_detection_id =  detection.last_frame_detection_id,
-            detection_time = detection.detection_time,
-            last_detection_time = detection.last_detection_time ).save()
-
 
 class DetectionManager:
     def __init__(self,video, polys,ws):
-        cap = cv2.VideoCapture(video.video_link.path)
-        self.frame_ammount = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.fps = cap.get(cv2.CAP_PROP_FPS)
-        cap.release()
+        self.frame_ammount = None
+        self.fps = None
         self.video = video
+        self.image_path ="static/"+ str(video.owner)+"/"+str(video.id) +"/"       
+        os.makedirs(self.image_path, exist_ok=False)
         self.ws = ws
-        self.zoneconfig = ZoneConfig(polys)    
+        self.zoneconfig = polys
         self.global_counter=0
         self.global_frame = -1
-        self.zones = []
         self.detections = []
         self.detections_dataframe = None
         self.count_timer = datetime.datetime.now()
@@ -189,27 +121,53 @@ class DetectionManager:
         self.orientation = None
         self.data_path = "data/"
 
+    def calculate_afarment(self, video):
+   
+        zoneconfig = video.zone_set.all()
+        zones=[poly.name for poly in zoneconfig]
+        perm_zones = list(permutations(zones, 2))
+        all_data = [
+
+        ]
+      
+        for orientation in perm_zones:
+            aux_data = {
+                "orientation":orientation[0]+"-"+orientation[1],
+                "detections":[ ]
+            }
+            for class_id in classes:
+                ammount = len(video.detectiondb_set.filter(input_zone=orientation[0], output_zone=orientation[1], class_id=class_id))
+                aux_data["detections"].append(
+                    {
+                        "class":classes[class_id]["name"],
+                        "amount": ammount
+                    }
+                )
+            all_data.append(aux_data)
+        return all_data
+
+     
     def obj_new(self,track_id,class_id, bbox,img,frame_idx):
-        self.object_detectable(bbox)
         aux_detection = Detection(self.global_counter,track_id, class_id, bbox,img,self.object_detectable(bbox)["zone"])
         aux_detection.last_frame_detection_id = frame_idx
         self.global_counter += 1
         self.detections.append(aux_detection)
         
+    def update_detection(self, detection, class_id, bbox, img, frame_idx):
+        detection.frames_counter+=1
+        detection.last_bbox=bbox                
+        detection.last_image = img.copy()
+        detection.last_detection_time = datetime.datetime.now()
+        detection.last_frame_detection_id = frame_idx
+        detection.frames_counter_class[class_id]["frames_detected"]+=1
 
-    def ask_obj_exists(self,track_id,class_id, bbox, img,frame_idx):
+    def ask_obj_exists(self, track_id):
         for detection in self.detections:
             if detection.track_id == track_id and not detection.is_lost:
-                detection.frames_counter+=1
-                detection.last_bbox=bbox                
-                detection.last_image = img.copy()
-                detection.last_detection_time = datetime.datetime.now()
-                detection.last_frame_detection_id = frame_idx
-                detection.frames_counter_class[class_id]["frames_detected"]+=1
-                return True                
-        return False
-    def bboxs_distance(self,detection):
+                return True, detection                
+        return False, None
         
+    def bboxs_distance(self,detection):        
         bbox1 = detection.first_bbox        
         bbox2 = detection.last_bbox
         c1 = [(bbox1[0]+bbox1[2])/2, (bbox1[3]+bbox1[1])/2]
@@ -225,11 +183,12 @@ class DetectionManager:
         else:
             return True
 
-    def set_obj_lost(self,detection):        
-        if detection.is_lost:
-            return
+    def set_obj_lost(self,detection):    
+
         max_frame_class = -1
         max_frame_class_idx = -1
+
+        # Takes the predominant class detection as class id of the object
         for idx in detection.frames_counter_class.keys():
             if max_frame_class<detection.frames_counter_class[idx]["frames_detected"]:
                 max_frame_class = detection.frames_counter_class[idx]["frames_detected"]
@@ -237,28 +196,113 @@ class DetectionManager:
 
         if max_frame_class != -1:
             detection.class_id = max_frame_class_idx       
-            
-        detection.is_lost=True
+                
+        detection.is_lost = True
         
         detection.output_zone = self.object_detectable(detection.last_bbox)["zone"]
         # SET ORIENTATION
-        detection.orientation = detection.input_zone+detection.output_zone
-        print(detection.orientation)
+        detection.orientation = detection.input_zone+detection.output_zone           
+        if self.valid_detection_to_save(detection):
+            self.save_detection_to_db(detection)
+    
+    def valid_detection_to_save(self,detection):     
+        return (
+            not self.same_bbox_by_distance(detection) 
+            and detection.frames_counter > MIN_FRAME_DETECTION_AMOUNT
+        )
+
+    def save_detection_to_db(self,detection):
+        self.save_detection(detection)
+        DetectionDB(
+            video = self.video,
+            class_id = detection.class_id,
+            last_bbox= list(detection.last_bbox),
+            first_bbox = list(detection.first_bbox),
+            input_zone = detection.input_zone ,
+            output_zone = detection.output_zone,
+            dist_btw_bbox = detection.dist_btw_bbox ,
+            frames_counter = detection.frames_counter,
+            last_frame_detection_id =  detection.last_frame_detection_id,
+            detection_time = detection.detection_time,
+            last_detection_time = detection.last_detection_time 
+        ).save()
+
+    def save_detection(self,detection):
+        first_img_zones = self.draw_zones_on_image(detection.first_image.copy())
+        class_id = detection.class_id
+        p1, p2 = (int(detection.first_bbox[0]), int(detection.first_bbox[1])), (int(detection.first_bbox[2]), int(detection.first_bbox[3]))
+        cv2.rectangle(first_img_zones, p1, p2, (0,255,0), 2, cv2.LINE_AA)  
+        cv2.putText(
+            first_img_zones,
+            detection.frames_counter_class[class_id]["name"], 
+            p1,0, 2, (0,0,255),thickness=3, 
+            lineType=cv2.LINE_AA
+        )
+        first_img_zones = cv2.circle(first_img_zones,(int((p2[0]+p1[0])/2), int((p2[1]+p1[1])/2)), radius=5, color=(0, 0, 255), thickness=-1)
+        
+        path_file = f"{self.image_path}{detection.orientation}/"+classes[class_id]["name"]     
+
+        os.makedirs(path_file, exist_ok=True)
+
+        
+        cv2.imwrite(f"{path_file}/{str(detection.id)}_in.jpg",first_img_zones)
+        
+        last_img_zones = self.draw_zones_on_image(detection.last_image)
+        p1, p2 = (int(detection.last_bbox[0]), int(detection.last_bbox[1])), (int(detection.last_bbox[2]), int(detection.last_bbox[3]))
+        cv2.rectangle(last_img_zones, p1, p2, (0,0,255), 2, cv2.LINE_AA) 
+        cv2.putText(
+            last_img_zones,
+            detection.frames_counter_class[class_id]["name"], 
+            p1,0, 2, (0,0,255),thickness=3, 
+            lineType=cv2.LINE_AA
+        )
+        last_img_zones = cv2.circle(last_img_zones,(int((p2[0]+p1[0])/2), int((p2[1]+p1[1])/2)), radius=5, color=(0, 0, 255), thickness=-1)
+
+        cv2.imwrite(f"{path_file}/{str(detection.id)}_out.jpg",last_img_zones)
+
+        
+    def draw_zones_on_image(self,img):
+        for zone in self.zoneconfig:
+            img= self.draw_poly(img,zone.poly)
+        return img
+
+    def draw_poly(self,img,actual_poly):
+        # Initialize black image of same dimensions for drawing the rectangles
+        blk = np.zeros(img.shape, np.uint8)
+        # Draw rectangles
+        cv2.fillPoly(blk,self.to_polyline(actual_poly),(0,255,255))     
+        img = cv2.addWeighted(img, 1.0, blk, 0.25, 1)
+        cv2.polylines( img,self.to_polyline(actual_poly),True,(0,255,255),2)
+        return img
+
+    def to_polyline(self, actual_poly):
+        pts = np.array([ [k_points['x'],k_points['y']] for k_points in actual_poly], np.int32)
+        pts = pts.reshape((-1,1,2))
+        return [pts]        
      
-    def obj_lost(self,track_id,class_id):
+    def filter_obj_lost(self, track_id, frame_idx, track_is_lost):
+        '''
+            filtering detections who are lost. 
+        '''
         new_det = []
         for detection in self.detections:
-            if detection.track_id == track_id and not detection.is_lost:  
-         
-               
-                if self.same_bbox_by_distance(detection):                    
-                    continue 
-                new_det.append(detection)
-                self.set_obj_lost(detection) 
-            else:           
+            if (
+                not detection.is_lost 
+                and
+                (
+                    (
+                        track_is_lost and                        
+                        detection.track_id == track_id                  
+                    )
+                    or frame_idx-detection.last_frame_detection_id > self.max_age
+                )
+            ):
+                self.set_obj_lost(detection)
+            else:
+
                 self.bboxs_distance( detection)
                 new_det.append(detection)
-       
+
         self.detections = new_det
 
     def filter_bbox_by_zones(self,preds,img,im0):
@@ -280,47 +324,44 @@ class DetectionManager:
         
     def object_detectable(self, bbox):        
         point = [int((bbox[0]+bbox[2])/2),int((bbox[1]+bbox[3])/2)]      
-        for zone_obj in self.zoneconfig.polys:           
+        for zone_obj in self.zoneconfig:           
             zone = Polygon( [[poly_point["x"],poly_point["y"]] for poly_point in zone_obj.poly] )
             if zone.contains( Point( point)  ):                    
                 return {"zone":zone_obj.name, "detectable":True}
        
         return {"zone":"NO ZONE", "detectable":False}
 
-    def update(self,bbox,track_id,class_id,img,is_lost,frame_idx):    
-        
-        
-        if len(self.detections)>0 and self.count_timer + datetime.timedelta( minutes = TEMP_FINISH_TIMER_MINUTES, seconds=TEMP_FINISH_TIMER_SECONDS) < datetime.datetime.now():
-            self.count_timer = datetime.datetime.now()
-            new_det = []
-            for detection in self.detections:
-                if not detection.is_lost and frame_idx-detection.last_frame_detection_id > self.max_age:
-                    self.set_obj_lost(detection)
-                if self.same_bbox_by_distance(detection):                    
-                    continue 
-                new_det.append(detection)
-            AfarmentDataManager(new_det,self.count_timer,self.video,self.zoneconfig)
-            self.detections=[]
-
-        if is_lost:
-            self.obj_lost(track_id,class_id)
-            return     
-
-        if self.ask_obj_exists(track_id,class_id,bbox,img,frame_idx):
+    def update(self, bbox, track_id, class_id, img, track_is_lost, frame_idx):  
+        before = time.time()
+        self.filter_obj_lost(track_id, frame_idx, track_is_lost)
+        if track_is_lost:
             return
 
-        self.obj_new(track_id,class_id,bbox,img,frame_idx)
+        obj_exists, detection = self.ask_obj_exists(track_id)
+        if obj_exists:
+            self.update_detection(detection, class_id, bbox, img, frame_idx)     
+        else:
+            self.obj_new(track_id, class_id, bbox, img, frame_idx)   
+        print(f"takes {time.time()-before}")
    
-    def get_status(self):
-        self.video=Video.objects.get(pk=self.video.pk)
+    def send_status(
+        self,
+        sync_det=[]
+    ):   
+        
         self.global_frame+=1
         to_ws = {
             "type":"proccess",
-            "message":(self.global_frame/self.frame_ammount)*100,
+            "message":{
+                "progress":(self.global_frame/self.frame_ammount)*100,
+                "global_frame":self.global_frame,
+                "detections":list(sync_det),
+                "data":self.calculate_afarment(self.video)
+            },
             "username":"detector"
         }
         if self.video.status != self.video.PROCESSING:
             to_ws["type"] = "end"
-        self.ws.send(json.dumps(to_ws))
+        self.ws.send(json.dumps(to_ws, cls=NumpyEncoder))
         
 
