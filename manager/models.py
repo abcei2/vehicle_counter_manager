@@ -70,15 +70,10 @@ class Video(models.Model):
                     default=QUEUED)
     task_id = models.CharField(max_length=128, null = True)
         
-class ZoneConfigDB(models.Model):
-    
-    video = models.ForeignKey(Video, on_delete=models.CASCADE ) 
- 
- 
 
 class Zone(models.Model):
     
-    zone_config = models.ForeignKey(ZoneConfigDB, on_delete=models.CASCADE)
+    video = models.ForeignKey(Video, on_delete=models.CASCADE, null = True)
     name = models.CharField(max_length=64)
     poly = ArrayField(    
         models.JSONField()   
@@ -90,6 +85,8 @@ class AfarmentDataDB(models.Model):
     video = models.ForeignKey(Video, on_delete=models.CASCADE ) 
     ammount = models.IntegerField()
     maneuver = models.CharField(max_length=64)
+    output_zone = models.OneToOneField(Zone, on_delete=models.SET_NULL, null=True, related_name="output_zone" ) 
+    input_zone = models.OneToOneField(Zone, on_delete=models.SET_NULL, null=True, related_name="input_zone" ) 
     class_name = models.CharField(max_length=64)
     class_id = models.IntegerField()
     

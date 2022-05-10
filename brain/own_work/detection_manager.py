@@ -38,8 +38,8 @@ import time
 #     'last_detection_time':None
 #     }
 
-TEMP_FINISH_TIMER_MINUTES = 15
-TEMP_FINISH_TIMER_SECONDS = 0
+TEMP_FINISH_TIMER_MINUTES = 0
+TEMP_FINISH_TIMER_SECONDS = 30
 
 
 classes ={
@@ -134,7 +134,8 @@ class AfarmentDataManager:
             det_dict.pop("first_image")
             det_dict.pop("last_image")
             dets_dict.append(det_dict)
-        zones=[i for i in zoneconfig.polys.keys()]
+        print(zoneconfig.polys)
+        zones=[poly.name for poly in zoneconfig.polys]
         detections_df = pd.DataFrame(dets_dict)
         perm_zones = list(permutations(zones, 2))
 
@@ -170,8 +171,10 @@ class AfarmentDataManager:
 
 class DetectionManager:
     def __init__(self,video, polys,ws):
-        self.frame_ammount = -1
-        self.fps = -1
+        cap = cv2.VideoCapture(video.video_link.path)
+        self.frame_ammount = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.fps = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
         self.video = video
         self.ws = ws
         self.zoneconfig = ZoneConfig(polys)    
@@ -296,7 +299,6 @@ class DetectionManager:
                 if self.same_bbox_by_distance(detection):                    
                     continue 
                 new_det.append(detection)
-         
             AfarmentDataManager(new_det,self.count_timer,self.video,self.zoneconfig)
             self.detections=[]
 
@@ -311,6 +313,7 @@ class DetectionManager:
    
     def get_status(self):
         self.video=Video.objects.get(pk=self.video.pk)
+        self.global_frame+=1
         to_ws = {
             "type":"proccess",
             "message":(self.global_frame/self.frame_ammount)*100,

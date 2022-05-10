@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-from .models import Video, ZoneConfigDB, Zone
+from .models import Video, Zone
 import json
 from .tasks import video_to_queue
 # Create your views here.
@@ -11,8 +11,10 @@ from rest_framework.permissions import IsAuthenticated  # <-- Here
 
 class UploadVideo(APIView):
     
+    
     permission_classes = (IsAuthenticated,)
     def post(self, request):
+        
         data = json.loads(request.POST.get('json'))
         response  = Response("-")
 
@@ -44,20 +46,20 @@ class UploadVideo(APIView):
         
         
         video = Video.objects.filter(owner=owner).exclude( status = Video.FINISHED)
+        
 
         if len(video)>0:           
             response.status_code = 200
             response.content = f"User already has 1 video, please connect to socket room "   
+            
+        
             return response
         else:
             video = Video(owner=owner, status = Video.QUEUED,video_link=request.FILES.get('myfile'))
             video.save()
 
-      
-            zone_config = ZoneConfigDB(video = video )
-            zone_config.save()
             for zone in data["zones"]:
-                Zone(zone_config = zone_config, name = zone["name"], poly = zone["poly"]).save()
+                Zone(video = video, name = zone["name"], poly = zone["poly"]).save()
 
             response.status_code = 200
             response.content = json.dumps({"video_pk": video.pk,"message":"Your video is on queued please connect to the socket."})
@@ -72,19 +74,15 @@ class VideoStatus(APIView):
     permission_classes = (IsAuthenticated,)
     
     def post(self, request):
-        print(request.user)
         
         owner = request.user
         response_content = {
             "status":"NO_VID",
             "message":"user can request to upload video"
-        }
-        
+        }        
         
         video = Video.objects.filter(owner=owner).exclude( status = Video.FINISHED)
-
         if len(video)>0:  
-            print(video)
             response_content["status"] = video[0].status
             if video[0].status == video[0].PROCESSING:
                 response_content["message"]  =  f"User already has 1 video proccesing, please connect to socket room "   
