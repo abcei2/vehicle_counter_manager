@@ -9,7 +9,7 @@ os.environ["NUMEXPR_NUM_THREADS"] = "1"
 import sys
 sys.path.insert(0, './brain/yolov5')
 
-from brain.yolov5.models.experimental import attempt_load
+from .yolov5.models.experimental import attempt_load
 from .yolov5.utils.downloads import attempt_download
 from .yolov5.models.common import DetectMultiBackend
 from .yolov5.utils.datasets import LoadImages, LoadStreams
@@ -27,7 +27,7 @@ from pathlib import Path
 import cv2
 import torch
 import torch.backends.cudnn as cudnn
-
+import numpy as np
 from .own_work.detection_manager import *
 
 
@@ -79,7 +79,7 @@ def detect(opt, detection_manager):
 
     for frame_idx, (path, img, im0s, vid_cap, s) in enumerate(dataset):
         if detection_manager.ref_frame is None:
-            detection_manager.ref_frame=img
+            detection_manager.ref_frame=img.copy()
             detection_manager.fps =  vid_cap.get(cv2.CAP_PROP_FPS)
             detection_manager.frame_ammount =  int(vid_cap.get(cv2.CAP_PROP_FRAME_COUNT))
         t1 = time_sync()
@@ -101,7 +101,7 @@ def detect(opt, detection_manager):
         dt[2] += time_sync() - t3
         
         new_det = detection_manager.filter_bbox_by_zones(pred.copy(),img,im0s.copy())
-
+        sync_det = []
         # Process detections
         for i, det in enumerate(new_det):  # detections per image
             seen += 1
@@ -139,25 +139,26 @@ def detect(opt, detection_manager):
                         bboxes = output[0:4]
                         id2 = output[4]
                         cls2 = output[5]
-                        is_lost = output[6] == 1
+                        track_is_lost = output[6] == 1
                         
                         c = int(cls2)  # integer class
+                        listoutput=list(np.append(output,conf.cpu().numpy()))
                         
+                        sync_det.append(listoutput)
                       
                         
-                        detection_manager.update(bboxes,id2,cls2, im0s,is_lost,frame_idx)
-                        if is_lost:
+                        detection_manager.update(bboxes,id2,cls2, im0s.copy(),track_is_lost,frame_idx)
+                        if track_is_lost:
                             continue
                         label = f'{id2} {names[c]} {conf:.2f}'
                         annotator.box_label(bboxes, label, color=colors(c, True))
                      
-
             else:
                 deepsort.increment_ages()
             # Stream results
             im0 = annotator.result()
-        detection_manager.get_status()
-        # print(detection_manager.video.status,"asdfas",detection_manager.video.PROCESSING)
+
+        detection_manager.send_status(sync_det)
         if detection_manager.video.status != detection_manager.video.PROCESSING:
             return
             # cv2.imshow("Image",im0)
