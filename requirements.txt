@@ -10,3 +10,8 @@ djangorestframework
 django-cors-headers
 websocket-client
 gevent
+# deep_sort_pytorch_req
+pillow
+vizer
+easydict
+sklearn
