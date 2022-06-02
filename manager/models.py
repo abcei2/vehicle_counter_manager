@@ -79,30 +79,31 @@ class Zone(models.Model):
         models.JSONField()   
     ) 
 
-
-
-class AfarmentDataDB(models.Model):
-    video = models.ForeignKey(Video, on_delete=models.CASCADE ) 
-    ammount = models.IntegerField()
-    maneuver = models.CharField(max_length=64)
-    output_zone = models.OneToOneField(Zone, on_delete=models.SET_NULL, null=True, related_name="output_zone" ) 
-    input_zone = models.OneToOneField(Zone, on_delete=models.SET_NULL, null=True, related_name="input_zone" ) 
-    class_name = models.CharField(max_length=64)
-    class_id = models.IntegerField()
-    
 class DetectionDB(models.Model):
     video = models.ForeignKey(Video, on_delete=models.CASCADE ) 
     class_id = models.IntegerField()
 
     last_bbox = ArrayField(models.IntegerField(default = 0), null=True)
     first_bbox = ArrayField(models.IntegerField(default = 0), null=True)         
+      
    
     input_zone = models.CharField(max_length=64)
     output_zone =  models.CharField(max_length=64)
 
     dist_btw_bbox = models.IntegerField(default = -1)    
     frames_counter = models.IntegerField(default = 0)        
-    last_frame_detection_id = models.IntegerField(default = 0)   
+    
+    first_frame_detection_id = models.IntegerField(null = True)   
+    last_frame_detection_id = models.IntegerField(null = True)   
 
     detection_time = models.TimeField(auto_now=True)
     last_detection_time = models.TimeField(null= True)  
+
+    
+
+class FrameDetection(models.Model):
+    
+    detection = models.ForeignKey(DetectionDB, on_delete=models.CASCADE, related_name="frames" ) 
+    video = models.ForeignKey(Video, on_delete=models.CASCADE, related_name="frames" ) 
+    frame_idx = models.IntegerField() 
+    bbox = ArrayField(models.IntegerField(default = 0))

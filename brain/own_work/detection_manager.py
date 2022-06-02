@@ -11,7 +11,7 @@ from itertools import permutations
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 
-from manager.models import AfarmentDataDB, DetectionDB, Video
+from manager.models import DetectionDB, Video, FrameDetection
 import json
 import time
 
@@ -70,7 +70,11 @@ class Detection:
         self.output_zone = -1
         self.frames_counter = 0        
         self.last_frame_detection_id = 0
+        self.first_frame_detection_id = 0
+        
         self.is_lost = False
+
+        self.frames_detected = []
         self.frames_counter_class={
             0:{
                 "name":"person",
@@ -119,7 +123,11 @@ class DetectionManager:
         self.max_age = 6
         self.ref_frame = None
         self.orientation = None
-        self.data_path = "data/"
+
+    def save_frame_ammount(self, frame_ammount):
+        self.frame_ammount = frame_ammount
+        self.video.frame_ammount = frame_ammount
+        self.video.save()
 
     def calculate_afarment(self, video):
    
@@ -150,11 +158,16 @@ class DetectionManager:
     def obj_new(self,track_id,class_id, bbox,img,frame_idx):
         aux_detection = Detection(self.global_counter,track_id, class_id, bbox,img,self.object_detectable(bbox)["zone"])
         aux_detection.last_frame_detection_id = frame_idx
+        aux_detection.first_frame_detection_id = frame_idx
         self.global_counter += 1
         self.detections.append(aux_detection)
         
     def update_detection(self, detection, class_id, bbox, img, frame_idx):
         detection.frames_counter+=1
+        detection.frames_detected.append({
+            "frame_idx":frame_idx,
+            "bbox":bbox,
+        })
         detection.last_bbox=bbox                
         detection.last_image = img.copy()
         detection.last_detection_time = datetime.datetime.now()
@@ -212,8 +225,10 @@ class DetectionManager:
         )
 
     def save_detection_to_db(self,detection):
-        self.save_detection(detection)
-        DetectionDB(
+        before = time.time()
+        
+
+        detectiondb = DetectionDB(
             video = self.video,
             class_id = detection.class_id,
             last_bbox= list(detection.last_bbox),
@@ -222,63 +237,24 @@ class DetectionManager:
             output_zone = detection.output_zone,
             dist_btw_bbox = detection.dist_btw_bbox ,
             frames_counter = detection.frames_counter,
+            first_frame_detection_id =  detection.first_frame_detection_id,
             last_frame_detection_id =  detection.last_frame_detection_id,
             detection_time = detection.detection_time,
-            last_detection_time = detection.last_detection_time 
-        ).save()
-
-    def save_detection(self,detection):
-        first_img_zones = self.draw_zones_on_image(detection.first_image.copy())
-        class_id = detection.class_id
-        p1, p2 = (int(detection.first_bbox[0]), int(detection.first_bbox[1])), (int(detection.first_bbox[2]), int(detection.first_bbox[3]))
-        cv2.rectangle(first_img_zones, p1, p2, (0,255,0), 2, cv2.LINE_AA)  
-        cv2.putText(
-            first_img_zones,
-            detection.frames_counter_class[class_id]["name"], 
-            p1,0, 2, (0,0,255),thickness=3, 
-            lineType=cv2.LINE_AA
+            last_detection_time = detection.last_detection_time
+  
         )
-        first_img_zones = cv2.circle(first_img_zones,(int((p2[0]+p1[0])/2), int((p2[1]+p1[1])/2)), radius=5, color=(0, 0, 255), thickness=-1)
-        
-        path_file = f"{self.image_path}{detection.orientation}/"+classes[class_id]["name"]     
+        detectiondb.save()
 
-        os.makedirs(path_file, exist_ok=True)
-
-        
-        cv2.imwrite(f"{path_file}/{str(detection.id)}_in.jpg",first_img_zones)
-        
-        last_img_zones = self.draw_zones_on_image(detection.last_image)
-        p1, p2 = (int(detection.last_bbox[0]), int(detection.last_bbox[1])), (int(detection.last_bbox[2]), int(detection.last_bbox[3]))
-        cv2.rectangle(last_img_zones, p1, p2, (0,0,255), 2, cv2.LINE_AA) 
-        cv2.putText(
-            last_img_zones,
-            detection.frames_counter_class[class_id]["name"], 
-            p1,0, 2, (0,0,255),thickness=3, 
-            lineType=cv2.LINE_AA
-        )
-        last_img_zones = cv2.circle(last_img_zones,(int((p2[0]+p1[0])/2), int((p2[1]+p1[1])/2)), radius=5, color=(0, 0, 255), thickness=-1)
-
-        cv2.imwrite(f"{path_file}/{str(detection.id)}_out.jpg",last_img_zones)
-
-        
-    def draw_zones_on_image(self,img):
-        for zone in self.zoneconfig:
-            img= self.draw_poly(img,zone.poly)
-        return img
-
-    def draw_poly(self,img,actual_poly):
-        # Initialize black image of same dimensions for drawing the rectangles
-        blk = np.zeros(img.shape, np.uint8)
-        # Draw rectangles
-        cv2.fillPoly(blk,self.to_polyline(actual_poly),(0,255,255))     
-        img = cv2.addWeighted(img, 1.0, blk, 0.25, 1)
-        cv2.polylines( img,self.to_polyline(actual_poly),True,(0,255,255),2)
-        return img
-
-    def to_polyline(self, actual_poly):
-        pts = np.array([ [k_points['x'],k_points['y']] for k_points in actual_poly], np.int32)
-        pts = pts.reshape((-1,1,2))
-        return [pts]        
+        frames_det=[]
+        for frame in detection.frames_detected:
+            frames_det.append(FrameDetection(
+                video = self.video, 
+                detection = detectiondb,
+                bbox = list(frame["bbox"]),
+                frame_idx = frame["frame_idx"]
+            ))
+        FrameDetection.objects.bulk_create(frames_det)
+        print(f"takes to save {time.time()-before} seconds")
      
     def filter_obj_lost(self, track_id, frame_idx, track_is_lost):
         '''
@@ -332,7 +308,7 @@ class DetectionManager:
         return {"zone":"NO ZONE", "detectable":False}
 
     def update(self, bbox, track_id, class_id, img, track_is_lost, frame_idx):  
-        before = time.time()
+   
         self.filter_obj_lost(track_id, frame_idx, track_is_lost)
         if track_is_lost:
             return
@@ -342,7 +318,6 @@ class DetectionManager:
             self.update_detection(detection, class_id, bbox, img, frame_idx)     
         else:
             self.obj_new(track_id, class_id, bbox, img, frame_idx)   
-        print(f"takes {time.time()-before}")
    
     def send_status(
         self,
@@ -364,4 +339,56 @@ class DetectionManager:
             to_ws["type"] = "end"
         self.ws.send(json.dumps(to_ws, cls=NumpyEncoder))
         
+    #DRAWWWW
+    def save_detection(self,detection):
+        first_img_zones = self.draw_zones_on_image(detection.first_image.copy())
+        class_id = detection.class_id
+        p1, p2 = (int(detection.first_bbox[0]), int(detection.first_bbox[1])), (int(detection.first_bbox[2]), int(detection.first_bbox[3]))
+        cv2.rectangle(first_img_zones, p1, p2, (0,255,0), 2, cv2.LINE_AA)  
+        cv2.putText(
+            first_img_zones,
+            detection.frames_counter_class[class_id]["name"], 
+            p1,0, 2, (0,0,255),thickness=3, 
+            lineType=cv2.LINE_AA
+        )
+        first_img_zones = cv2.circle(first_img_zones,(int((p2[0]+p1[0])/2), int((p2[1]+p1[1])/2)), radius=5, color=(0, 0, 255), thickness=-1)
+        
+        path_file = f"{self.image_path}{detection.orientation}/"+classes[class_id]["name"]     
 
+        os.makedirs(path_file, exist_ok=True)
+
+        
+        cv2.imwrite(f"{path_file}/{str(detection.id)}_in.jpg",first_img_zones)
+        
+        last_img_zones = self.draw_zones_on_image(detection.last_image)
+        p1, p2 = (int(detection.last_bbox[0]), int(detection.last_bbox[1])), (int(detection.last_bbox[2]), int(detection.last_bbox[3]))
+        cv2.rectangle(last_img_zones, p1, p2, (0,0,255), 2, cv2.LINE_AA) 
+        cv2.putText(
+            last_img_zones,
+            detection.frames_counter_class[class_id]["name"], 
+            p1,0, 2, (0,0,255),thickness=3, 
+            lineType=cv2.LINE_AA
+        )
+        last_img_zones = cv2.circle(last_img_zones,(int((p2[0]+p1[0])/2), int((p2[1]+p1[1])/2)), radius=5, color=(0, 0, 255), thickness=-1)
+
+        cv2.imwrite(f"{path_file}/{str(detection.id)}_out.jpg",last_img_zones)
+
+        
+    def draw_zones_on_image(self,img):
+        for zone in self.zoneconfig:
+            img= self.draw_poly(img,zone.poly)
+        return img
+
+    def draw_poly(self,img,actual_poly):
+        # Initialize black image of same dimensions for drawing the rectangles
+        blk = np.zeros(img.shape, np.uint8)
+        # Draw rectangles
+        cv2.fillPoly(blk,self.to_polyline(actual_poly),(0,255,255))     
+        img = cv2.addWeighted(img, 1.0, blk, 0.25, 1)
+        cv2.polylines( img,self.to_polyline(actual_poly),True,(0,255,255),2)
+        return img
+
+    def to_polyline(self, actual_poly):
+        pts = np.array([ [k_points['x'],k_points['y']] for k_points in actual_poly], np.int32)
+        pts = pts.reshape((-1,1,2))
+        return [pts]        

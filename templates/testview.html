@@ -183,13 +183,7 @@
                 formdata.append("myfile", ev.files[0]);
 
                 formdata.append("json", JSON.stringify( data_out_example));
-               
-                var requestOptions = {
-                    method: 'POST',                   
-                    headers: QueryHeaders,
-                    body: formdata,
-                    redirect: 'follow'
-                };
+              
 
                 var request = new XMLHttpRequest();
                 request.open('POST', HOST_URL); 

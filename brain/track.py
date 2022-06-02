@@ -81,7 +81,7 @@ def detect(opt, detection_manager):
         if detection_manager.ref_frame is None:
             detection_manager.ref_frame=img.copy()
             detection_manager.fps =  vid_cap.get(cv2.CAP_PROP_FPS)
-            detection_manager.frame_ammount =  int(vid_cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            detection_manager.save_frame_ammount(int(vid_cap.get(cv2.CAP_PROP_FRAME_COUNT)))
         t1 = time_sync()
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
