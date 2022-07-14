@@ -116,7 +116,7 @@ class DetectionManager:
         self.ws = ws
         self.zoneconfig = polys
         self.global_counter=0
-        self.global_frame = -1
+        self.frame_idx = -1
         self.detections = []
         self.detections_dataframe = None
         self.count_timer = datetime.datetime.now()
@@ -130,7 +130,7 @@ class DetectionManager:
         self.video.save()
 
     def calculate_afarment(self, video):
-   
+        before = time.time()
         zoneconfig = video.zone_set.all()
         zones=[poly.name for poly in zoneconfig]
         perm_zones = list(permutations(zones, 2))
@@ -152,6 +152,8 @@ class DetectionManager:
                     }
                 )
             all_data.append(aux_data)
+
+        print(f"TAKES {time.time() - before} seconds")
         return all_data
 
      
@@ -215,8 +217,6 @@ class DetectionManager:
         detection.output_zone = self.object_detectable(detection.last_bbox)["zone"]
         # SET ORIENTATION
         detection.orientation = detection.input_zone+detection.output_zone           
-        if self.valid_detection_to_save(detection):
-            self.save_detection_to_db(detection)
     
     def valid_detection_to_save(self,detection):     
         return (
@@ -260,7 +260,6 @@ class DetectionManager:
         '''
             filtering detections who are lost. 
         '''
-        new_det = []
         for detection in self.detections:
             if (
                 not detection.is_lost 
@@ -277,9 +276,7 @@ class DetectionManager:
             else:
 
                 self.bboxs_distance( detection)
-                new_det.append(detection)
 
-        self.detections = new_det
 
     def filter_bbox_by_zones(self,preds,img,im0):
         filtered_preds=None
@@ -310,6 +307,17 @@ class DetectionManager:
     def update(self, bbox, track_id, class_id, img, track_is_lost, frame_idx):  
    
         self.filter_obj_lost(track_id, frame_idx, track_is_lost)
+        
+        if len(self.detections)>40 or frame_idx >= self.frame_ammount-2:
+            new_det = []        
+            for detection in self.detections:  
+                if detection.is_lost:              
+                    if self.valid_detection_to_save(detection):
+                        self.save_detection_to_db(detection)
+                else:
+                    new_det.append(detection)
+            self.detections = new_det
+
         if track_is_lost:
             return
 
@@ -324,14 +332,14 @@ class DetectionManager:
         sync_det=[]
     ):   
         
-        self.global_frame+=1
         to_ws = {
             "type":"proccess",
             "message":{
-                "progress":(self.global_frame/self.frame_ammount)*100,
-                "global_frame":self.global_frame,
-                "detections":list(sync_det),
-                "data":self.calculate_afarment(self.video)
+                "progress":(self.frame_idx/self.frame_ammount)*100,
+                "frame_idx":self.frame_idx,
+                "data":self.calculate_afarment(self.video) 
+                    if self.frame_idx%400==0 or self.frame_idx>=self.frame_ammount-2 
+                    else []
             },
             "username":"detector"
         }

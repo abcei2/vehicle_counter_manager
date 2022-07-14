@@ -101,7 +101,7 @@ def detect(opt, detection_manager):
         dt[2] += time_sync() - t3
         
         new_det = detection_manager.filter_bbox_by_zones(pred.copy(),img,im0s.copy())
-        sync_det = []
+       
         # Process detections
         for i, det in enumerate(new_det):  # detections per image
             seen += 1
@@ -142,9 +142,7 @@ def detect(opt, detection_manager):
                         track_is_lost = output[6] == 1
                         
                         c = int(cls2)  # integer class
-                        listoutput=list(np.append(output,conf.cpu().numpy()))
                         
-                        sync_det.append(listoutput)
                       
                         
                         detection_manager.update(bboxes,id2,cls2, im0s.copy(),track_is_lost,frame_idx)
@@ -157,8 +155,8 @@ def detect(opt, detection_manager):
                 deepsort.increment_ages()
             # Stream results
             im0 = annotator.result()
-
-        detection_manager.send_status(sync_det)
+        detection_manager.frame_idx =  frame_idx
+        detection_manager.send_status()
         if detection_manager.video.status != detection_manager.video.PROCESSING:
             return
             # cv2.imshow("Image",im0)
