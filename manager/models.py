@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.postgres.fields import ArrayField, JSONField
 from django.contrib.auth.models import User
+from itertools import permutations
 # Create your models here.
         
 DEFAULT_POLY = {
@@ -21,6 +22,7 @@ DEFAULT_POLY = {
         "pressed":False
     }
 }
+
 DEFAULT_FRAMES_COUNTER_CLASS={
     0:{
         "name":"person",
@@ -69,7 +71,33 @@ class Video(models.Model):
                     choices=VIDEO_STATUS,
                     default=QUEUED)
     task_id = models.CharField(max_length=128, null = True)
-        
+
+    @property
+    def calculate_afarment(self):
+        zoneconfig = self.zone_set.all()
+        zones=[poly.name for poly in zoneconfig]
+        perm_zones = list(permutations(zones, 2))
+        all_data = [
+
+        ]
+      
+        for orientation in perm_zones:
+            aux_data = {
+                "orientation":orientation[0]+"-"+orientation[1],
+                "detections":[ ]
+            }
+            for class_id in DEFAULT_FRAMES_COUNTER_CLASS:
+                ammount = len(self.detectiondb_set.filter(input_zone=orientation[0], output_zone=orientation[1], class_id=class_id))
+                aux_data["detections"].append(
+                    {
+                        "class":DEFAULT_FRAMES_COUNTER_CLASS[class_id]["name"],
+                        "amount": ammount
+                    }
+                )
+            all_data.append(aux_data)
+
+        return all_data
+
 
 class Zone(models.Model):
     

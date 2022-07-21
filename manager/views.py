@@ -99,6 +99,7 @@ class DownloadVideo(APIView):
     def post(self, request, video_pk):
         owner = request.user
         video = owner.video_set.get(pk=video_pk)
+        frame_amount = video.frame_ammount
         if video:
             video_url = video.video_link.path
             cap = cv2.VideoCapture(video_url)           

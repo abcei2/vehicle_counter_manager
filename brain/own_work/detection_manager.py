@@ -108,6 +108,7 @@ class Detection:
 
 class DetectionManager:
     def __init__(self,video, polys,ws):
+        self.init_timer =  time.time()
         self.frame_ammount = None
         self.fps = None
         self.video = video
@@ -129,34 +130,6 @@ class DetectionManager:
         self.video.frame_ammount = frame_ammount
         self.video.save()
 
-    def calculate_afarment(self, video):
-        before = time.time()
-        zoneconfig = video.zone_set.all()
-        zones=[poly.name for poly in zoneconfig]
-        perm_zones = list(permutations(zones, 2))
-        all_data = [
-
-        ]
-      
-        for orientation in perm_zones:
-            aux_data = {
-                "orientation":orientation[0]+"-"+orientation[1],
-                "detections":[ ]
-            }
-            for class_id in classes:
-                ammount = len(video.detectiondb_set.filter(input_zone=orientation[0], output_zone=orientation[1], class_id=class_id))
-                aux_data["detections"].append(
-                    {
-                        "class":classes[class_id]["name"],
-                        "amount": ammount
-                    }
-                )
-            all_data.append(aux_data)
-
-        print(f"TAKES {time.time() - before} seconds")
-        return all_data
-
-     
     def obj_new(self,track_id,class_id, bbox,img,frame_idx):
         aux_detection = Detection(self.global_counter,track_id, class_id, bbox,img,self.object_detectable(bbox)["zone"])
         aux_detection.last_frame_detection_id = frame_idx
@@ -224,9 +197,7 @@ class DetectionManager:
             and detection.frames_counter > MIN_FRAME_DETECTION_AMOUNT
         )
 
-    def save_detection_to_db(self,detection):
-        before = time.time()
-        
+    def save_detection_to_db(self,detection):       
 
         detectiondb = DetectionDB(
             video = self.video,
@@ -254,7 +225,6 @@ class DetectionManager:
                 frame_idx = frame["frame_idx"]
             ))
         FrameDetection.objects.bulk_create(frames_det)
-        print(f"takes to save {time.time()-before} seconds")
      
     def filter_obj_lost(self, track_id, frame_idx, track_is_lost):
         '''
@@ -332,20 +302,20 @@ class DetectionManager:
         sync_det=[]
     ):   
         
-        to_ws = {
-            "type":"proccess",
-            "message":{
-                "progress":(self.frame_idx/self.frame_ammount)*100,
-                "frame_idx":self.frame_idx,
-                "data":self.calculate_afarment(self.video) 
-                    if self.frame_idx%400==0 or self.frame_idx>=self.frame_ammount-2 
-                    else []
-            },
-            "username":"detector"
-        }
-        if self.video.status != self.video.PROCESSING:
-            to_ws["type"] = "end"
-        self.ws.send(json.dumps(to_ws, cls=NumpyEncoder))
+        if self.frame_idx%400==0 or self.frame_idx>=self.frame_ammount-2:
+            to_ws = {
+                "type":"proccess",
+                "message":{
+                    "progress":(self.frame_idx/self.frame_ammount)*100,
+                    "frame_idx":self.frame_idx,
+                    "data":self.video.calculate_afarment,
+                    "takes":time.time()-self.init_timer 
+                },
+                "username":"detector"
+            }
+            if self.video.status != self.video.PROCESSING:
+                to_ws["type"] = "end"
+            self.ws.send(json.dumps(to_ws, cls=NumpyEncoder))
         
     #DRAWWWW
     def save_detection(self,detection):
